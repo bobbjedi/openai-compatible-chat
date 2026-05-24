@@ -5,6 +5,7 @@ export interface Session {
   title: string;
   createdAt: number;
   updatedAt: number;
+  systemPrompt?: string;
 }
 
 export interface Message {

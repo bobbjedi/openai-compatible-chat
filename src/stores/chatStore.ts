@@ -25,6 +25,55 @@ export const useChatStore = defineStore('chat', () => {
 
   let abortController: AbortController | null = null;
 
+  // --- Token budget helpers ---
+
+  function estimateTokens(content: string): number {
+    // Грубая оценка: ~4 символа на токен (для рус/англ) + 4 токена overhead на сообщение
+    return Math.ceil(content.length / 4) + 4;
+  }
+
+  function buildTrimmedMessages(
+    messagesArr: Message[],
+    systemPrompt?: string,
+    maxTokens?: number,
+  ): LlmMessage[] {
+    const limit = maxTokens || 200000;
+    const result: LlmMessage[] = [];
+    let tokenBudget = 0;
+
+    // System prompt всегда первый и не обрезается
+    if (systemPrompt) {
+      result.push({ role: 'system', content: systemPrompt });
+      tokenBudget += estimateTokens(systemPrompt);
+    }
+
+    // Собираем user/assistant с конца, пока не превысим лимит
+    const eligible: { role: 'user' | 'assistant'; content: string }[] = [];
+    messagesArr.forEach((m) => {
+      if (m.role === 'user' || (m.role === 'assistant' && m.content !== '')) {
+        eligible.push({ role: m.role, content: m.content });
+      }
+    });
+
+    // Идём с конца, собираем пока укладываемся в бюджет
+    const kept: typeof eligible = [];
+    for (let i = eligible.length - 1; i >= 0; i -= 1) {
+      const cost = estimateTokens(eligible[i].content);
+      // eslint-disable-next-line no-continue
+      if (tokenBudget + cost > limit) continue;
+      kept.unshift(eligible[i]);
+      tokenBudget += cost;
+    }
+
+    kept.forEach((m) => result.push(m));
+
+    // eslint-disable-next-line no-console
+    console.log('[buildTrimmedMessages] ~tokens:', tokenBudget,
+      '/', limit, 'messages:', result.length);
+
+    return result;
+  }
+
   // --- Getters ---
   const currentSession = computed(
     () => sessions.value.find(
@@ -72,6 +121,16 @@ export const useChatStore = defineStore('chat', () => {
     const session = sessions.value.find((s) => s.id === id);
     if (!session) return;
     session.title = title;
+    session.updatedAt = Date.now();
+    await putSession({ ...toRaw(session) });
+  }
+
+  async function updateSystemPrompt(prompt: string | undefined) {
+    const session = sessions.value.find(
+      (s) => s.id === currentSessionId.value,
+    );
+    if (!session) return;
+    session.systemPrompt = prompt;
     session.updatedAt = Date.now();
     await putSession({ ...toRaw(session) });
   }
@@ -144,10 +203,19 @@ export const useChatStore = defineStore('chat', () => {
     assistantMsg.id = assistantId;
     messages.value.push(assistantMsg);
 
-    // 3. Формируем payload для API
-    const llmMessages: LlmMessage[] = messages.value
-      .filter((m) => m.role === 'user' || m.content !== '')
-      .map((m) => ({ role: m.role, content: m.content }));
+    // 3. Формируем payload для API (с обрезкой по токенам из настроек)
+    const llmMessages = buildTrimmedMessages(
+      messages.value,
+      session?.systemPrompt,
+      settings.tokenLimit,
+    );
+
+    // eslint-disable-next-line no-console
+    console.log('[sendMessage] Payload →', JSON.stringify({
+      endpoint: settings.endpoint,
+      model: settings.model,
+      messages: llmMessages,
+    }, null, 2));
 
     // 4. Стриминг
     isStreaming.value = true;
@@ -233,9 +301,20 @@ export const useChatStore = defineStore('chat', () => {
     assistantMsg.id = assistantId;
     messages.value.push(assistantMsg);
 
-    const llmMessages: LlmMessage[] = messages.value
-      .filter((m) => m.role === 'user' || m.content !== '')
-      .map((m) => ({ role: m.role, content: m.content }));
+    const session = sessions.value.find((s) => s.id === sid);
+    // Формируем payload с обрезкой по токенам из настроек
+    const llmMessages = buildTrimmedMessages(
+      messages.value,
+      session?.systemPrompt,
+      settings.tokenLimit,
+    );
+
+    // eslint-disable-next-line no-console
+    console.log('[editMessage] Payload →', JSON.stringify({
+      endpoint: settings.endpoint,
+      model: settings.model,
+      messages: llmMessages,
+    }, null, 2));
 
     isStreaming.value = true;
     abortController = new AbortController();
@@ -299,6 +378,7 @@ export const useChatStore = defineStore('chat', () => {
     selectSession,
     renameSession,
     removeSession,
+    updateSystemPrompt,
     // message actions
     sendMessage,
     cancelStream,

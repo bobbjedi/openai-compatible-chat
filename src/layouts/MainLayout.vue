@@ -4,7 +4,7 @@
       <q-toolbar class="text-subtitle2">
         <q-btn flat dense round icon="menu" aria-label="Menu" @click="leftDrawerOpen = !leftDrawerOpen" />
         <q-toolbar-title class="text-weight-medium">
-          ChatGPT
+          Simple LLM Chat
         </q-toolbar-title>
         <q-btn flat dense round icon="settings" @click="showChatSettings = true">
           <q-tooltip>Chat Settings</q-tooltip>

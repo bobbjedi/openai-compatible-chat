@@ -28,7 +28,7 @@ src/
 │   ├── ChatInput.vue            # Поле ввода сообщения
 │   ├── SessionList.vue          # Список сессий в боковой панели
 │   ├── SettingsDialog.vue       # Диалог глобальных настроек API (в footer sidebar)
-│   └── ChatSettingsDialog.vue   # Диалог настроек чата (заглушка, открывается из header)
+│   └── ChatSettingsDialog.vue   # Диалог настроек конкретного чата (system prompt, открывается из header)
 ├── css/
 │   ├── app.scss                 # Глобальные стили (светлая + тёмная тема, ~730 строк)
 │   └── quasar.variables.scss    # Переменные Quasar
@@ -61,6 +61,7 @@ src/
 | `title` | `string` | Название чата |
 | `createdAt` | `number` | Timestamp создания |
 | `updatedAt` | `number` | Timestamp последнего обновления |
+| `systemPrompt` | `string` (опционально) | Системный промпт (инструкция) для чата |
 
 Индекс: `updatedAt`
 
@@ -83,7 +84,7 @@ src/
 | `key` (keyPath) | `string` | Ключ настройки |
 | `value` | `string` | Значение (всегда строка) |
 
-Ключи: `endpoint`, `apiKey`, `model`
+Ключи: `endpoint`, `apiKey`, `model`, `tokenLimit`
 
 > **Примечание**: `darkMode` вынесен из IndexedDB в `localStorage` для синхронного доступа (избежание мигания темы при загрузке).
 
@@ -97,7 +98,11 @@ User Input (ChatInput.vue)
     → Создание user-сообщения → putMessage() → IndexedDB
     → Авто-заголовок сессии (первое сообщение)
     → Создание пустого assistant-сообщения → putMessage() → IndexedDB
-    → Формирование LlmMessage[] из messages
+    → buildTrimmedMessages() — обрезка контекста по токенам
+      → system prompt (если задан) всегда первым сообщением
+      → user/assistant сообщения, пока укладываются в лимит токенов
+    → Формирование LlmMessage[] (system + user/assistant)
+    → console.log полного payload для отладки
     → streamChat() (llmProvider.ts)
       → fetch POST /chat/completions (SSE, stream: true)
       → ReadableStream → построчное чтение → JSON-парсинг чанков
@@ -162,14 +167,22 @@ Flex-контейнер для корректного скролла:
 Модальный диалог **глобальных** настроек API (открывается из пункта «Settings» в footer боковой панели):
 - **API Endpoint** — базовый URL (по умолчанию `https://api.deepseek.com/v1`)
 - **API Key** — поле с возможностью показать/скрыть (кнопка `visibility`)
-- **Model** — название модели (по умолчанию `deepseek-chat`)
-- **Save** — сохраняет все три поля в IndexedDB через `settingsStore`
+- **Model** — выпадающий список (`q-select` с `use-input`) с известными моделями + возможность ввода кастомной:
+  - `deepseek-v4-flash`
+  - `deepseek-v4-pro`
+  - `deepseek-chat` (по умолчанию)
+  - `deepseek-reasoner`
+- **Token Limit** — максимальное количество токенов контекста (1000–2 000 000, шаг 1000, по умолчанию 200 000)
+- **Save** — сохраняет все поля в IndexedDB через `settingsStore`
 - **Валидация**: endpoint и model обязательны
 
 ### [`ChatSettingsDialog.vue`](src/components/ChatSettingsDialog.vue)
 
-Заглушка для будущих настроек конкретного чата. Открывается по нажатию на иконку шестерёнки в header.
-Содержит пустой `q-card` с заголовком «Chat Settings» и кнопкой закрытия.
+Диалог настроек конкретного чата. Открывается по нажатию на иконку шестерёнки в header (фиксированная ширина 440px, плотный режим):
+- **System Prompt** — многострочное поле (`q-input` type `textarea`, autogrow), лимит 4000 символов со счётчиком
+- **Загрузка из файла** — `q-file` для выбора `.txt` файла (макс. 1 MB), содержимое читается через `FileReader.readAsText()` и подставляется в поле ввода
+- **Save/Cancel** — сохраняет system prompt в текущую сессию через `chatStore.updateSystemPrompt()` и обновляет запись в IndexedDB (поле `systemPrompt` в объекте сессии)
+- При сохранении system prompt немедленно применяется — при следующей отправке сообщения он будет включён первым в payload
 
 ---
 
@@ -179,7 +192,7 @@ Flex-контейнер для корректного скролла:
 
 Корневой layout приложения:
 - **Header** с кнопкой меню (бургер), заголовком «ChatGPT» и кнопкой шестерёнки
-- **Шестерёнка** → открывает [`ChatSettingsDialog`](src/components/ChatSettingsDialog.vue) (настройки чата, заглушка)
+- **Шестерёнка** → открывает [`ChatSettingsDialog`](src/components/ChatSettingsDialog.vue) (настройки чата: system prompt, загрузка из .txt)
 - **Sidebar** (`q-drawer`) — содержит [`SessionList`](src/components/SessionList.vue)
 - **Сворачивание sidebar**: при выборе/создании чата (`@session-selected`) sidebar автоматически закрывается (`leftDrawerOpen = false`)
 - Глобальные настройки (API) вынесены в footer боковой панели — открываются через пункт «Settings» в [`SessionList`](src/components/SessionList.vue)
@@ -230,8 +243,9 @@ Flex-контейнер для корректного скролла:
 | `createSession(title?)` | Создание сессии, авто-переключение |
 | `selectSession(id)` | Загрузка сообщений выбранной сессии |
 | `renameSession(id, title)` | Переименование с сохранением в IndexedDB |
+| `updateSystemPrompt(prompt)` | Сохранение/очистка system prompt для текущей сессии (в IndexedDB) |
 | `removeSession(id)` | Удаление сессии + все её сообщения (транзакция в IndexedDB) |
-| `sendMessage(text)` | Отправка сообщения + SSE-стриминг ответа |
+| `sendMessage(text)` | Отправка сообщения + SSE-стриминг ответа (с обрезкой контекста и system prompt) |
 | `cancelStream()` | Отмена стриминга через `AbortController` |
 | `editMessage(id, newText)` | Редактирование с обрезанием последующих сообщений и перезапуском |
 
@@ -240,6 +254,17 @@ Flex-контейнер для корректного скролла:
 - Авто-заголовок: при первом сообщении в сессии `title` заменяется на первые 50 символов текста
 - При отмене/ошибке стриминга пустое assistant-сообщение удаляется из `messages`
 
+**Обрезка контекста** (`buildTrimmedMessages`):
+
+Функция собирает массив `LlmMessage[]` для отправки в API с учётом лимита токенов:
+1. System prompt (если задан) — всегда включается первым, его токены вычитаются из бюджета
+2. Сообщения user/assistant добавляются с конца (последние N сообщений), пока сумма токенов ≤ лимит
+3. Если сообщение не влезает целиком — оно пропускается, но остальные могут быть добавлены
+4. Оценка токенов: `Math.ceil(content.length / 4) + 4` (≈4 символа на токен + 4 токена overhead на сообщение)
+5. Лимит по умолчанию: 200 000 токенов, настраивается в Settings → Token Limit
+
+**Отладочное логирование**: полный payload (endpoint, model, messages с длинами контента) выводится в консоль при каждом вызове `sendMessage()` и `editMessage()`.
+
 ### [`settingsStore.ts`](src/stores/settingsStore.ts) — настройки
 
 | State | Тип | По умолчанию | Хранилище | Описание |
@@ -247,14 +272,16 @@ Flex-контейнер для корректного скролла:
 | `endpoint` | `Ref<string>` | `https://api.deepseek.com/v1` | IndexedDB | Базовый URL API |
 | `apiKey` | `Ref<string>` | `''` | IndexedDB | API-ключ |
 | `model` | `Ref<string>` | `deepseek-chat` | IndexedDB | Название модели |
+| `tokenLimit` | `Ref<number>` | `200000` | IndexedDB | Лимит токенов контекста |
 | `darkMode` | `Ref<boolean>` | `false` | **localStorage** | Тёмная тема |
 
 | Action | Описание |
 |--------|----------|
-| `load()` | Однократная загрузка endpoint/apiKey/model из IndexedDB; `darkMode` читается из `localStorage` синхронно при инициализации |
+| `load()` | Однократная загрузка endpoint/apiKey/model/tokenLimit из IndexedDB; `darkMode` читается из `localStorage` синхронно при инициализации |
 | `saveEndpoint(val)` | Сохранение endpoint |
 | `saveApiKey(val)` | Сохранение API-ключа |
 | `saveModel(val)` | Сохранение модели |
+| `saveTokenLimit(val)` | Сохранение лимита токенов (число, в IndexedDB как строка) |
 | `toggleDarkMode()` | Переключение темы: `Dark.set()`, синхронная запись в `localStorage` (`chatgpt-dark-mode`) |
 
 **Персистентность темы**: `darkMode` хранится в `localStorage` (ключ `chatgpt-dark-mode`), а не в IndexedDB. Это позволяет:
@@ -375,9 +402,12 @@ interface ChatParams { endpoint: string; apiKey: string; model: string; messages
 | Не видно списка сессий | `height: calc(100% - 60px)` без высоты родителя | Flex-контейнер: `flex: 1 1 0%; min-height: 0` |
 | Двойной спиннер при стриминге | Пустое assistant-сообщение рендерилось в `v-for` + отдельный спиннер | Фильтр в `displayMessages` + условие `!lastAssistantContent` |
 | 226 ошибок ESLint (airbnb-base + @typescript-eslint) | Конфликт Quasar автоформаттера (4 пробела в шаблонах) с airbnb-base indent (2 пробела), `max-len`, `@typescript-eslint/no-unsafe-*`, `no-non-null-assertion`, `no-floating-promises` и др. | Исправлено 9 файлов: `overrides` в `.eslintrc.js` (indent/max-len off для `.vue`), `eslint-disable` для `no-unsafe-*` в `router/index.ts` (Quasar typing limitation), замена `!` → `as string`/`?? 0`, `void` для floating promises, реорганизация кода |
+| ESLint `no-unsafe-*` в `quasar.conf.js` | `chainWebpack` манипуляции с webpack chain API вызывали ошибки `@typescript-eslint/no-unsafe-member-access/assignment/return` | Директивы `eslint-disable` для трёх правил вынесены в заголовок файла (строки 11–13), блокируя проверку для всего файла конфигурации |
+| ESLint `no-unused-vars` в `filterModels` (SettingsDialog.vue) | TypeScript-аннотация параметра `fn` в сигнатуре `q-select` проверяется линтером как неиспользуемая переменная | Блочный `/* eslint-disable @typescript-eslint/no-unused-vars, no-unused-vars */` вокруг функции `filterModels` |
 | Тема сбрасывалась в светлую при перезагрузке | `darkMode` хранился в IndexedDB (асинхронная загрузка) | Перенос в `localStorage` (синхронный доступ) + inline-скрипт в `index.template.html` для применения темы до рендера |
 | Sidebar не сворачивался при выборе чата | Отсутствовала связь между `SessionList` и `MainLayout` | Emit `session-selected` из `SessionList`, обработчик в `MainLayout` устанавливает `leftDrawerOpen = false` |
 | Кнопка Edit только на последнем сообщении | Жёсткое условие `i === store.displayMessages.length - 1` | Убрано условие — теперь кнопка Edit на всех сообщениях пользователя |
+| Sass-предупреждение о nested rules | `sass` 1.77.8 предупреждает о declarations после nested rules в `quasar.sass` | Попытка подавления через `quietDeps` в `chainWebpack` приводила к ошибке webpack (`Cannot read properties of undefined`). Оставлено как есть — варнинг не критичен. |
 
 ---
 
@@ -390,6 +420,8 @@ interface ChatParams { endpoint: string; apiKey: string; model: string; messages
 - **Роутинг**: hash mode
 - **Dev-сервер**: порт 8080, авто-открытие браузера
 - **Boot-файлы**: `i18n`, `pinia`
+- **ESLint**: в заголовке файла отключены правила `@typescript-eslint/no-unsafe-member-access`, `no-unsafe-assignment`, `no-unsafe-return` (webpack chain API не типизирован для Quasar)
+- **chainWebpack**: пустой (не используется); попытка добавить `quietDeps` для sass-loader вызывала ошибки webpack и была отменена
 
 ### [`package.json`](package.json)
 
