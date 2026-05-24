@@ -92,5 +92,17 @@ module.exports = {
 
     // allow debugger during development only
     'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
-  }
+  },
+  overrides: [
+    {
+      files: ['*.vue'],
+      rules: {
+        indent: 'off',
+        'max-len': 'off',
+        'vue/script-indent': 'off',
+        'vue/max-len': 'off',
+        '@typescript-eslint/indent': 'off',
+      },
+    },
+  ],
 }

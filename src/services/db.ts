@@ -31,7 +31,9 @@ async function getDb(): Promise<IDBPDatabase> {
   dbInstance = await openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
       if (!db.objectStoreNames.contains('sessions')) {
-        const sessionStore = db.createObjectStore('sessions', { keyPath: 'id' });
+        const sessionStore = db.createObjectStore('sessions', {
+          keyPath: 'id',
+        });
         sessionStore.createIndex('updatedAt', 'updatedAt');
       }
       if (!db.objectStoreNames.contains('messages')) {
@@ -54,13 +56,13 @@ async function getDb(): Promise<IDBPDatabase> {
 
 export async function getAllSessions(): Promise<Session[]> {
   const db = await getDb();
-  const sessions = await db.getAll('sessions');
-  return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+  const raw = await db.getAll('sessions');
+  return (raw as Session[]).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getSession(id: string): Promise<Session | undefined> {
   const db = await getDb();
-  return db.get('sessions', id);
+  return db.get('sessions', id) as Promise<Session | undefined>;
 }
 
 export async function putSession(session: Session): Promise<void> {
@@ -71,14 +73,13 @@ export async function putSession(session: Session): Promise<void> {
 export async function deleteSession(id: string): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(['sessions', 'messages'], 'readwrite');
-  await Promise.all([
-    tx.objectStore('sessions').delete(id),
-    tx.objectStore('messages').index('sessionId').getAllKeys().then((keys) => {
-      for (const key of keys) {
-        tx.objectStore('messages').delete(key);
-      }
-    }),
-  ]);
+  const index = tx.objectStore('messages').index('sessionId');
+  const keys = await index.getAllKeys();
+  const store = tx.objectStore('messages');
+  keys.forEach((key) => {
+    void store.delete(key);
+  });
+  void tx.objectStore('sessions').delete(id);
   await tx.done;
 }
 
@@ -87,8 +88,8 @@ export async function deleteSession(id: string): Promise<void> {
 export async function getMessages(sessionId: string): Promise<Message[]> {
   const db = await getDb();
   const index = db.transaction('messages').store.index('sessionId');
-  const msgs = await index.getAll(sessionId);
-  return msgs.sort((a, b) => a.createdAt - b.createdAt);
+  const raw = await index.getAll(sessionId);
+  return (raw as Message[]).sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export async function putMessage(msg: Message): Promise<number> {
@@ -105,7 +106,7 @@ export async function deleteMessage(id: number): Promise<void> {
 
 export async function getSetting(key: string): Promise<string | undefined> {
   const db = await getDb();
-  const entry = await db.get('settings', key);
+  const entry = (await db.get('settings', key)) as Settings | undefined;
   return entry?.value;
 }
 

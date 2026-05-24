@@ -3,7 +3,9 @@
     <q-header class="chatgpt-header" elevated>
       <q-toolbar class="text-subtitle2">
         <q-btn flat dense round icon="menu" aria-label="Menu" @click="leftDrawerOpen = !leftDrawerOpen" />
-        <q-toolbar-title class="text-weight-medium">ChatGPT</q-toolbar-title>
+        <q-toolbar-title class="text-weight-medium">
+          ChatGPT
+        </q-toolbar-title>
         <q-btn flat dense round icon="settings">
           <q-tooltip>Settings</q-tooltip>
           <q-menu v-model="menuOpen" anchor="bottom right" self="top right" class="chatgpt-settings-menu">
@@ -16,9 +18,12 @@
               </q-item>
               <q-item clickable v-ripple @click="settingsStore.toggleDarkMode()">
                 <q-item-section avatar>
-                  <q-icon :name="settingsStore.darkMode ? 'dark_mode' : 'light_mode'" />
+                  <q-icon :name="settingsStore.darkMode
+                    ? 'dark_mode' : 'light_mode'" />
                 </q-item-section>
-                <q-item-section>{{ settingsStore.darkMode ? 'Light Mode' : 'Dark Mode' }}</q-item-section>
+                <q-item-section>
+                  {{ settingsStore.darkMode ? 'Light Mode' : 'Dark Mode' }}
+                </q-item-section>
               </q-item>
             </q-list>
           </q-menu>
@@ -28,7 +33,7 @@
 
     <q-drawer v-model="leftDrawerOpen" show-if-above :width="260" :breakpoint="700" class="chatgpt-sidebar"
       :class="{ 'chatgpt-sidebar--closed': !leftDrawerOpen }">
-      <SessionList />
+      <SessionList @session-selected="onSessionSelected" />
     </q-drawer>
 
     <q-page-container>
@@ -59,8 +64,17 @@ export default defineComponent({
       showSettings.value = true;
     }
 
+    function onSessionSelected() {
+      leftDrawerOpen.value = false;
+    }
+
     return {
-      leftDrawerOpen, menuOpen, showSettings, settingsStore, openSettingsDialog,
+      leftDrawerOpen,
+      menuOpen,
+      showSettings,
+      settingsStore,
+      openSettingsDialog,
+      onSessionSelected,
     };
   },
 });

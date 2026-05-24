@@ -2,7 +2,7 @@
     <div class="chatgpt-sessions">
         <!-- New chat button -->
         <div class="q-pa-sm">
-            <q-btn no-caps class="chatgpt-new-btn full-width" @click="store.createSession()">
+            <q-btn no-caps class="chatgpt-new-btn full-width" @click="newChat">
                 <q-icon name="add" size="xs" class="q-mr-sm" />
                 <span>New chat</span>
             </q-btn>
@@ -13,7 +13,7 @@
             <q-list dense>
                 <q-item v-for="s in store.sessions" :key="s.id" clickable v-ripple
                     :active="s.id === store.currentSessionId" active-class="chatgpt-session--active"
-                    class="chatgpt-session q-mx-xs" @click="store.selectSession(s.id)">
+                    class="chatgpt-session q-mx-xs" @click="selectChat(s.id)">
                     <q-item-section avatar class="q-mr-xs">
                         <q-icon name="chat_bubble_outline" size="xs" />
                     </q-item-section>
@@ -74,7 +74,8 @@ import { useChatStore, type Session } from 'src/stores/chatStore';
 
 export default defineComponent({
     name: 'SessionList',
-    setup() {
+    emits: ['session-selected'],
+    setup(_props, { emit }) {
         const store = useChatStore();
         const renameDialog = ref(false);
         const renameId = ref<string | null>(null);
@@ -96,12 +97,24 @@ export default defineComponent({
             renameDialog.value = false;
         }
 
+        async function selectChat(id: string) {
+            await store.selectSession(id);
+            emit('session-selected');
+        }
+
+        async function newChat() {
+            await store.createSession();
+            emit('session-selected');
+        }
+
         return {
             store,
             renameDialog,
             renameTitle,
             startRename,
             confirmRename,
+            selectChat,
+            newChat,
         };
     },
 });

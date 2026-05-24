@@ -16,12 +16,19 @@ import routes from './routes';
  * with the Router instance.
  */
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-return
 export default route((/* { store, ssrContext } */) => {
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment,
+    @typescript-eslint/no-unsafe-return */
   const createHistory = process.env.SERVER
     ? createMemoryHistory
-    : (process.env.VUE_ROUTER_MODE === 'history' ? createWebHistory : createWebHashHistory);
+    : (
+      process.env.VUE_ROUTER_MODE === 'history'
+        ? createWebHistory
+        : createWebHashHistory
+    );
 
-  const Router = createRouter({
+  const router = createRouter({
     scrollBehavior: () => ({ left: 0, top: 0 }),
     routes,
 
@@ -33,5 +40,7 @@ export default route((/* { store, ssrContext } */) => {
     ),
   });
 
-  return Router;
+  return router;
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment,
+    @typescript-eslint/no-unsafe-return */
 });

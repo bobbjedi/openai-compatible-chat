@@ -26,13 +26,19 @@ export const useChatStore = defineStore('chat', () => {
   let abortController: AbortController | null = null;
 
   // --- Getters ---
-  const currentSession = computed(() => sessions.value.find((s) => s.id === currentSessionId.value) ?? null);
+  const currentSession = computed(
+    () => sessions.value.find(
+      (s) => s.id === currentSessionId.value,
+    ) ?? null,
+  );
 
   const displayMessages = computed(() => messages.value.filter((m) => {
     if (m.role === 'system') return false;
     // Скрываем пустое assistant-сообщение во время стриминга —
     // вместо него показывается спиннер в шаблоне
-    if (m.role === 'assistant' && !m.content && isStreaming.value) return false;
+    if (m.role === 'assistant' && !m.content && isStreaming.value) {
+      return false;
+    }
     return true;
   }));
 
@@ -40,6 +46,12 @@ export const useChatStore = defineStore('chat', () => {
 
   async function loadSessions() {
     sessions.value = await getAllSessions();
+  }
+
+  async function selectSession(id: string) {
+    currentSessionId.value = id;
+    error.value = null;
+    messages.value = await getMessages(id);
   }
 
   async function createSession(title?: string): Promise<string> {
@@ -53,14 +65,7 @@ export const useChatStore = defineStore('chat', () => {
     };
     await putSession(session);
     sessions.value.unshift(session);
-    await selectSession(id);
-    return id;
-  }
-
-  async function selectSession(id: string) {
-    currentSessionId.value = id;
-    error.value = null;
-    messages.value = await getMessages(id);
+    return selectSession(id).then(() => id);
   }
 
   async function renameSession(id: string, title: string) {
@@ -101,7 +106,7 @@ export const useChatStore = defineStore('chat', () => {
       await createSession(text.slice(0, 50));
     }
 
-    const sid = currentSessionId.value!;
+    const sid = currentSessionId.value as string;
     const now = Date.now();
     error.value = null;
 
@@ -140,7 +145,6 @@ export const useChatStore = defineStore('chat', () => {
     messages.value.push(assistantMsg);
 
     // 3. Формируем payload для API
-    // Фильтр уже убирает пустое assistant-сообщение, slice не нужен
     const llmMessages: LlmMessage[] = messages.value
       .filter((m) => m.role === 'user' || m.content !== '')
       .map((m) => ({ role: m.role, content: m.content }));
@@ -149,7 +153,6 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming.value = true;
     abortController = new AbortController();
 
-    // Принудительно обновляем UI для реактивности
     const idx = messages.value.findIndex((m) => m.id === assistantId);
 
     try {
@@ -167,14 +170,12 @@ export const useChatStore = defineStore('chat', () => {
             }
           },
           onDone() {
-            // Сохраняем финальное содержимое
             if (idx >= 0) {
-              putMessage({ ...toRaw(messages.value[idx]) });
+              void putMessage({ ...toRaw(messages.value[idx]) });
             }
           },
           onError(err: Error) {
             error.value = err.message;
-            // Удаляем пустое или частичное сообщение
             if (idx >= 0 && !messages.value[idx].content) {
               messages.value.splice(idx, 1);
             }
@@ -199,7 +200,10 @@ export const useChatStore = defineStore('chat', () => {
 
     // Удаляем все сообщения после редактируемого (из IndexedDB)
     const removed = messages.value.splice(idx + 1);
-    await Promise.all(removed.map((m) => { if (m.id) deleteMessage(m.id); }));
+    await Promise.all(removed.map((m) => {
+      if (m.id) return deleteMessage(m.id);
+      return undefined;
+    }));
 
     // Обновляем текст редактируемого сообщения
     messages.value[idx].content = newText;
@@ -207,8 +211,7 @@ export const useChatStore = defineStore('chat', () => {
       await putMessage({ ...toRaw(messages.value[idx]) });
     }
 
-    // Теперь отправляем как новое — переиспользуем логику sendMessage,
-    // но без создания нового user-сообщения
+    // Отправляем как новое — без создания нового user-сообщения
     const settings = useSettingsStore();
     await settings.load();
 
@@ -217,7 +220,7 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
 
-    const sid = currentSessionId.value!;
+    const sid = currentSessionId.value as string;
     error.value = null;
 
     const assistantMsg: Message = {
@@ -242,18 +245,25 @@ export const useChatStore = defineStore('chat', () => {
     try {
       await streamChat(
         {
-          endpoint: settings.endpoint, apiKey: settings.apiKey, model: settings.model, messages: llmMessages,
+          endpoint: settings.endpoint,
+          apiKey: settings.apiKey,
+          model: settings.model,
+          messages: llmMessages,
         },
         {
           onChunk(delta: string) {
             if (aidx >= 0) messages.value[aidx].content += delta;
           },
           onDone() {
-            if (aidx >= 0) putMessage({ ...toRaw(messages.value[aidx]) });
+            if (aidx >= 0) {
+              void putMessage({ ...toRaw(messages.value[aidx]) });
+            }
           },
           onError(err: Error) {
             error.value = err.message;
-            if (aidx >= 0 && !messages.value[aidx].content) messages.value.splice(aidx, 1);
+            if (aidx >= 0 && !messages.value[aidx].content) {
+              messages.value.splice(aidx, 1);
+            }
           },
         },
         abortController.signal,

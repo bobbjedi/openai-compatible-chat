@@ -33,7 +33,7 @@ export default defineComponent({
             const val = text.value.trim();
             if (!val || store.isStreaming) return;
             text.value = '';
-            store.sendMessage(val);
+            void store.sendMessage(val);
         }
 
         return { text, store, submit };

@@ -31,7 +31,7 @@
             </div>
 
             <!-- Message list -->
-            <div v-for="(msg, i) in store.displayMessages" :key="msg.id" class="chatgpt-msg-row" :class="msg.role === 'assistant'
+            <div v-for="msg in store.displayMessages" :key="msg.id" class="chatgpt-msg-row" :class="msg.role === 'assistant'
                 ? 'chatgpt-msg--assistant'
                 : 'chatgpt-msg--user'">
                 <div class="chatgpt-msg-inner">
@@ -59,27 +59,33 @@
                         <!-- Edit mode for user messages -->
                         <div v-if="editingId === msg.id" class="chatgpt-edit-area">
                             <q-input v-model="editText" outlined dense autogrow type="textarea"
-                                class="chatgpt-edit-input" @keydown.ctrl.enter="saveEdit(msg.id!)" />
+                                class="chatgpt-edit-input" @keydown.ctrl.enter="saveEdit(msg.id ?? 0)" />
                             <div class="chatgpt-edit-actions">
                                 <q-btn flat size="sm" label="Cancel" @click="cancelEdit" />
                                 <q-btn flat size="sm" color="primary" label="Save & Submit" :disable="!editText.trim()"
-                                    @click="saveEdit(msg.id!)" />
+                                    @click="saveEdit(msg.id ?? 0)" />
                             </div>
-                            <div class="chatgpt-edit-hint text-caption text-grey-6">
+                            <div class="chatgpt-edit-hint
+                  text-caption text-grey-6">
                                 Ctrl+Enter to submit
                             </div>
                         </div>
                         <div v-else>
-                            <div v-if="msg.role === 'assistant'" class="chatgpt-markdown" v-html="renderMarkdown(
-                                msg.content || '_..._')" />
+                            <div v-if="msg.role === 'assistant'" class="chatgpt-markdown"
+                                v-html="renderMarkdown(msg.content || '_..._')" />
                             <div v-else class="chatgpt-text">
                                 {{ msg.content }}
                             </div>
                         </div>
-                        <!-- Edit button for user messages (not in edit mode, not streaming) -->
-                        <div v-if="msg.role === 'user' && editingId !== msg.id && !store.isStreaming
-                            && i === store.displayMessages.length - 1" class="chatgpt-edit-btn-row">
-                            <q-btn flat dense size="sm" icon="edit" color="grey-6" @click="startEdit(msg)">
+                        <!-- Action buttons (Copy + Edit) -->
+                        <div v-if="editingId !== msg.id
+                            && !store.isStreaming" class="chatgpt-msg-actions">
+                            <q-btn flat dense size="sm" icon="content_copy" color="grey-6"
+                                @click="copyMessage(msg.content)">
+                                <q-tooltip>Copy</q-tooltip>
+                            </q-btn>
+                            <q-btn v-if="msg.role === 'user'" flat dense size="sm" icon="edit" color="grey-6"
+                                @click="startEdit(msg)">
                                 <q-tooltip>Edit</q-tooltip>
                             </q-btn>
                         </div>
@@ -87,7 +93,7 @@
                 </div>
             </div>
 
-            <!-- Streaming indicator: only when last assistant msg is still empty -->
+            <!-- Streaming indicator -->
             <div v-if="store.isStreaming && !lastAssistantContent" class="chatgpt-msg-row chatgpt-msg--assistant">
                 <div class="chatgpt-msg-inner">
                     <div class="chatgpt-avatar">
@@ -147,7 +153,9 @@ export default defineComponent({
 
         watch(
             () => store.displayMessages.length,
-            () => nextTick().then(scrollToBottom),
+            () => {
+                void nextTick().then(scrollToBottom);
+            },
         );
 
         watch(
@@ -156,11 +164,13 @@ export default defineComponent({
                 return msgs.length > 0 ? msgs[msgs.length - 1].content : '';
             },
             () => {
-                nextTick().then(() => {
+                void nextTick().then(() => {
                     const el = scrollRef.value;
                     if (el) {
-                        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-                        if (nearBottom || store.isStreaming) el.scrollTop = el.scrollHeight;
+                        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+                        if (dist < 100 || store.isStreaming) {
+                            el.scrollTop = el.scrollHeight;
+                        }
                     }
                 });
             },
@@ -168,15 +178,19 @@ export default defineComponent({
 
         const lastAssistantContent = computed(() => {
             const msgs = store.messages;
-            for (let i = msgs.length - 1; i >= 0; i--) {
+            for (let i = msgs.length - 1; i >= 0; i -= 1) {
                 if (msgs[i].role === 'assistant') return !!msgs[i].content;
             }
             return false;
         });
 
         function startEdit(msg: Message) {
-            editingId.value = msg.id!;
+            editingId.value = msg.id ?? null;
             editText.value = msg.content;
+        }
+
+        function copyMessage(text: string) {
+            void navigator.clipboard.writeText(text);
         }
 
         function cancelEdit() {
@@ -190,7 +204,7 @@ export default defineComponent({
             editingId.value = null;
             editText.value = '';
             await store.editMessage(messageId, text);
-            nextTick().then(scrollToBottom);
+            void nextTick().then(scrollToBottom);
         }
 
         return {
@@ -199,6 +213,7 @@ export default defineComponent({
             renderMarkdown,
             editingId,
             editText,
+            copyMessage,
             lastAssistantContent,
             startEdit,
             cancelEdit,

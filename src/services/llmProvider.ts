@@ -4,9 +4,13 @@ export interface LlmMessage {
 }
 
 export interface StreamCallbacks {
+  // eslint-disable-next-line no-unused-vars
   onChunk: (delta: string) => void;
+  // eslint-disable-next-line no-unused-vars
   onReasoning?: (text: string) => void;
+  // eslint-disable-next-line no-unused-vars
   onDone: (fullContent: string) => void;
+  // eslint-disable-next-line no-unused-vars
   onError: (error: Error) => void;
 }
 
@@ -17,13 +21,17 @@ export interface ChatParams {
   messages: LlmMessage[];
 }
 
+interface SseChoice {
+  delta?: {
+    // eslint-disable-next-line camelcase
+    content?: string;
+    // eslint-disable-next-line camelcase
+    reasoning_content?: string;
+  };
+}
+
 interface SseChunk {
-  choices?: Array<{
-    delta?: {
-      content?: string;
-      reasoning_content?: string;
-    };
-  }>;
+  choices?: SseChoice[];
 }
 
 /**
@@ -65,11 +73,11 @@ export async function streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
   let fullContent = '';
-  let fullReasoning = '';
 
   try {
     // eslint-disable-next-line no-constant-condition
     while (true) {
+      // eslint-disable-next-line no-await-in-loop
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -78,9 +86,10 @@ export async function streamChat(
       // Keep last partial line in buffer
       buffer = lines.pop() || '';
 
-      for (const line of lines) {
+      for (let li = 0; li < lines.length; li += 1) {
+        const line = lines[li];
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        if (!trimmed || !trimmed.startsWith('data:')) continue; // eslint-disable-line no-continue
 
         const data = trimmed.slice(5).trim();
         if (data === '[DONE]') {
@@ -89,12 +98,11 @@ export async function streamChat(
         }
 
         try {
-          const chunk: SseChunk = JSON.parse(data);
+          const chunk = JSON.parse(data) as SseChunk;
           const delta = chunk.choices?.[0]?.delta;
-          if (!delta) continue;
+          if (!delta) continue; // eslint-disable-line no-continue
 
           if (delta.reasoning_content) {
-            fullReasoning += delta.reasoning_content;
             callbacks.onReasoning?.(delta.reasoning_content);
           }
           if (delta.content) {
@@ -116,6 +124,14 @@ export async function streamChat(
   }
 
   callbacks.onDone(fullContent);
+}
+
+interface ChatResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
 }
 
 /**
@@ -146,6 +162,6 @@ export async function chat(
     throw new Error(`API error ${response.status}: ${errBody}`);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as ChatResponse;
   return data.choices?.[0]?.message?.content ?? '';
 }
