@@ -746,3 +746,152 @@ body.body--dark .chatgpt-messages::-webkit-scrollbar-thumb {
     max-width: 100%;
   }
 }
+
+/* ---- Summary dialog ---- */
+.chatgpt-summary-dialog {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.chatgpt-summary-content {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 32px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.chatgpt-summary-text {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font-size: 15px;
+  color: #1f1f1f;
+}
+
+/* Dark: summary dialog */
+body.body--dark .chatgpt-summary-dialog {
+  background: #343541;
+}
+
+body.body--dark .chatgpt-summary-dialog .q-bar {
+  background: #343541 !important;
+  color: #ececf1 !important;
+}
+
+body.body--dark .chatgpt-summary-content {
+  background: #343541;
+}
+
+body.body--dark .chatgpt-summary-text {
+  color: #ececf1;
+}
+
+/* ---- User Facts dialog ---- */
+.chatgpt-facts-dialog {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.chatgpt-facts-content {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 32px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.chatgpt-facts-text {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font-size: 15px;
+  color: #1f1f1f;
+}
+
+.chatgpt-facts-empty {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.chatgpt-facts-input {
+  width: 100%;
+}
+
+/* Dark: facts dialog */
+body.body--dark .chatgpt-facts-dialog {
+  background: #343541;
+}
+
+body.body--dark .chatgpt-facts-dialog .q-bar {
+  background: #343541 !important;
+  color: #ececf1 !important;
+}
+
+body.body--dark .chatgpt-facts-content {
+  background: #343541;
+}
+
+body.body--dark .chatgpt-facts-text {
+  color: #ececf1;
+}
+
+body.body--dark .chatgpt-facts-empty {
+  color: #8e8ea0;
+}
+
+/* ---- Facts banner (in-chat notification) ---- */
+.chatgpt-facts-banner {
+  border-bottom: 1px solid #e5e5e5;
+  background: #f0fdf4;
+  flex-shrink: 0;
+}
+
+.chatgpt-facts-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  font-size: 14px;
+  color: #1f1f1f;
+}
+
+.chatgpt-facts-banner-body {
+  padding: 12px 24px 16px;
+  border-top: 1px solid #e5e5e5;
+}
+
+.chatgpt-facts-text-small {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 13px;
+  color: #374151;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.chatgpt-facts-edit-input {
+  width: 100%;
+}
+
+/* Dark: facts banner */
+body.body--dark .chatgpt-facts-banner {
+  background: #1a3a2e;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.body--dark .chatgpt-facts-banner-header {
+  color: #ececf1;
+}
+
+body.body--dark .chatgpt-facts-banner-body {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.body--dark .chatgpt-facts-text-small {
+  color: #d1d5db;
+}

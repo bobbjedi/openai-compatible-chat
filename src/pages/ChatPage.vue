@@ -5,6 +5,11 @@
             <div class="text-subtitle2 ellipsis">
                 {{ store.currentSession?.title || 'ChatGPT' }}
             </div>
+            <q-space />
+            <q-btn v-if="store.currentSession?.summary" flat dense size="sm" icon="description" color="grey-6"
+                @click="summaryDialog = true">
+                <q-tooltip>View Summary</q-tooltip>
+            </q-btn>
         </q-bar>
 
         <!-- Error -->
@@ -14,6 +19,38 @@
                 <q-btn flat dense round icon="close" @click="store.error = null" />
             </template>
         </q-banner>
+
+        <!-- Facts notification -->
+        <div v-if="store.factsNotification" class="chatgpt-facts-banner">
+            <div class="chatgpt-facts-banner-header">
+                <q-icon name="fact_check" color="accent" size="sm" />
+                <span class="text-weight-medium">🧠 New facts extracted</span>
+                <q-space />
+                <q-btn v-if="!showFullFacts && !editingFactsInline" flat dense no-caps size="sm" color="accent"
+                    label="Show" @click="showFullFacts = true" />
+                <q-btn v-else-if="!editingFactsInline" flat dense no-caps size="sm" color="accent" label="Hide"
+                    @click="showFullFacts = false" />
+                <q-btn v-if="!editingFactsInline" flat dense round size="sm" icon="edit" color="grey-6"
+                    @click="startEditFactsInline">
+                    <q-tooltip>Edit facts</q-tooltip>
+                </q-btn>
+                <q-btn v-else flat dense no-caps size="sm" color="primary" label="Save" @click="saveFactsInline" />
+                <q-btn v-if="!editingFactsInline" flat dense round size="sm" icon="close" color="grey-6"
+                    @click="store.factsNotification = null">
+                    <q-tooltip>Dismiss</q-tooltip>
+                </q-btn>
+            </div>
+            <div v-if="showFullFacts && !editingFactsInline" class="chatgpt-facts-banner-body">
+                <div class="chatgpt-facts-text-small">{{ store.factsNotification }}</div>
+            </div>
+            <div v-if="editingFactsInline" class="chatgpt-facts-banner-body">
+                <q-input v-model="factsEditText" outlined dense autogrow type="textarea"
+                    class="chatgpt-facts-edit-input" @keydown.ctrl.enter="saveFactsInline" />
+                <div class="text-caption text-grey-6 q-mt-sm">
+                    Ctrl+Enter to save · Markdown supported
+                </div>
+            </div>
+        </div>
 
         <!-- Messages -->
         <div ref="scrollRef" class="chatgpt-messages">
@@ -115,6 +152,24 @@
 
         <!-- Input -->
         <ChatInput />
+
+        <!-- Summary dialog -->
+        <q-dialog v-model="summaryDialog" maximized>
+            <q-card class="chatgpt-summary-dialog">
+                <q-bar class="bg-white text-black">
+                    <div class="text-subtitle2 ellipsis">
+                        Summary — {{ store.currentSession?.title || 'Chat' }}
+                    </div>
+                    <q-space />
+                    <q-btn dense flat icon="close" v-close-popup>
+                        <q-tooltip>Close</q-tooltip>
+                    </q-btn>
+                </q-bar>
+                <q-card-section class="chatgpt-summary-content">
+                    <div class="chatgpt-summary-text">{{ store.currentSession?.summary || '' }}</div>
+                </q-card-section>
+            </q-card>
+        </q-dialog>
     </q-page>
 </template>
 
@@ -126,6 +181,7 @@ import {
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useChatStore, type Message } from 'src/stores/chatStore';
+import { useSettingsStore } from 'src/stores/settingsStore';
 import ChatInput from 'src/components/ChatInput.vue';
 
 export default defineComponent({
@@ -136,6 +192,12 @@ export default defineComponent({
         const scrollRef = ref<HTMLElement | null>(null);
         const editingId = ref<number | null>(null);
         const editText = ref('');
+        const summaryDialog = ref(false);
+        const showFullFacts = ref(false);
+        const editingFactsInline = ref(false);
+        const factsEditText = ref('');
+
+        const settingsStore = useSettingsStore();
 
         onMounted(async () => {
             await store.init();
@@ -189,6 +251,20 @@ export default defineComponent({
             editText.value = msg.content;
         }
 
+        function startEditFactsInline() {
+            factsEditText.value = store.factsNotification || '';
+            editingFactsInline.value = true;
+            showFullFacts.value = true;
+        }
+
+        async function saveFactsInline() {
+            if (factsEditText.value.trim()) {
+                await settingsStore.saveUserFacts(factsEditText.value.trim());
+                store.factsNotification = null;
+            }
+            editingFactsInline.value = false;
+        }
+
         function copyMessage(text: string) {
             void navigator.clipboard.writeText(text);
         }
@@ -218,6 +294,12 @@ export default defineComponent({
             startEdit,
             cancelEdit,
             saveEdit,
+            summaryDialog,
+            showFullFacts,
+            editingFactsInline,
+            factsEditText,
+            startEditFactsInline,
+            saveFactsInline,
         };
     },
 });

@@ -23,6 +23,7 @@ export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false);
   const error = ref<string | null>(null);
   const isSummarizing = ref(false);
+  const factsNotification = ref<string | null>(null);
 
   let abortController: AbortController | null = null;
 
@@ -37,6 +38,7 @@ export const useChatStore = defineStore('chat', () => {
     messagesArr: Message[],
     systemPrompt?: string,
     summary?: string,
+    userFacts?: string,
     maxTokens?: number,
   ): LlmMessage[] {
     const limit = maxTokens || 200000;
@@ -47,6 +49,15 @@ export const useChatStore = defineStore('chat', () => {
     if (systemPrompt) {
       result.push({ role: 'system', content: systemPrompt });
       tokenBudget += estimateTokens(systemPrompt);
+    }
+
+    // User Facts — глобальная база знаний, инжектится после system prompt
+    if (userFacts) {
+      result.push({
+        role: 'system',
+        content: `[Global facts known about the user, use this info when relevant]\n${userFacts}`,
+      });
+      tokenBudget += estimateTokens(userFacts) + 16;
     }
 
     // Rolling summary — вставляется после system prompt как контекст всей истории
@@ -243,6 +254,63 @@ ${dialogueText}
         // eslint-disable-next-line no-console
         console.log('[maybeSummarize] Саммари обновлено, длина:', newSummary.length);
       }
+
+      // --- Extract / update User Facts ---
+      // Берём полный набор user/assistant сообщений для более широкого контекста
+      const allUserAssistant = messages.value.filter(
+        (m) => m.role === 'user' || m.role === 'assistant',
+      );
+      if (allUserAssistant.length > 0 && settings.userFacts !== undefined) {
+        try {
+          const prevFacts = settings.userFacts
+            ? `Текущие известные факты о пользователе:\n${settings.userFacts}\n\n---\n`
+            : '';
+
+          const factsPrompt = `Ты — ассистент, который ведёт "базу знаний" о пользователе (User Facts). Извлеки из диалога факты, которые влияют на будущие решения или имеют долгосрочную ценность: имя, предпочтения, питомцы, проекты, технологии, привычки, важные события, контекст работы и т.д.
+
+**Критерий отбора:** факт должен сохраняться, только если он влияет на будущие решения или имеет долгосрочную ценность.
+✅ Пример факта: «Есть рыжий кот Лала, сдох примерно в мае 2025» — это долгосрочная информация о питомце.
+❌ Не факт: «Сегодня настроение паршивое» — временное состояние, не влияет на будущие диалоги.
+
+${prevFacts}Последний диалог:
+${dialogueText}
+
+Обнови список фактов (сохрани старые, добавь новые, исправь противоречащие). Пиши на том же языке, что и диалог. Формат: маркдаун, краткие пункты. Не включай временные настроения, однодневные планы и тривиальную информацию.`;
+
+          // eslint-disable-next-line no-console
+          console.log('[maybeSummarize] Извлечение User Facts, модель:', summaryModel);
+          // eslint-disable-next-line no-console
+          console.log('[maybeSummarize] Facts payload →', JSON.stringify({
+            endpoint: settings.endpoint,
+            model: summaryModel,
+            promptLength: factsPrompt.length,
+            prevFactsLength: settings.userFacts.length,
+            recentMessages: recentBatch.length,
+          }, null, 2));
+
+          const newFacts = await chat(
+            {
+              endpoint: settings.endpoint,
+              apiKey: settings.apiKey,
+              model: summaryModel,
+              messages: [{ role: 'user', content: factsPrompt }],
+            },
+          );
+
+          if (newFacts) {
+            await settings.saveUserFacts(newFacts.trim());
+
+            // eslint-disable-next-line no-console
+            console.log('[maybeSummarize] User Facts обновлены, длина:', newFacts.length);
+
+            // Показываем уведомление в чате
+            factsNotification.value = newFacts.trim();
+          }
+        } catch (factsErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[maybeSummarize] Ошибка извлечения фактов:', factsErr);
+        }
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[maybeSummarize] Ошибка генерации саммари:', err);
@@ -324,6 +392,7 @@ ${dialogueText}
       messages.value,
       session?.systemPrompt,
       session?.summary,
+      settings.userFacts,
       settings.tokenLimit,
     );
 
@@ -425,6 +494,7 @@ ${dialogueText}
       messages.value,
       session?.systemPrompt,
       session?.summary,
+      settings.userFacts,
       settings.tokenLimit,
     );
 
@@ -494,6 +564,7 @@ ${dialogueText}
     displayMessages,
     // summary
     isSummarizing,
+    factsNotification,
     maybeSummarize,
     updateSummaryEnabled,
     // session actions

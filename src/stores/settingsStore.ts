@@ -27,6 +27,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const model = ref('deepseek-chat');
   const summaryModel = ref('deepseek-chat');
   const tokenLimit = ref(200000);
+  const userFacts = ref('');
   const darkMode = ref(loadDarkMode());
 
   // Применяем тему сразу при инициализации стора
@@ -36,18 +37,20 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function load() {
     if (loaded) return;
-    const [ep, key, mdl, smdl, tkl] = await Promise.all([
+    const [ep, key, mdl, smdl, tkl, facts] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
       getSetting('model'),
       getSetting('summaryModel'),
       getSetting('tokenLimit'),
+      getSetting('userFacts'),
     ]);
     if (ep) endpoint.value = ep;
     if (key) apiKey.value = key;
     if (mdl) model.value = mdl;
     if (smdl) summaryModel.value = smdl;
     if (tkl) tokenLimit.value = parseInt(tkl, 10) || 200000;
+    if (facts) userFacts.value = facts;
     loaded = true;
   }
 
@@ -76,6 +79,11 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('tokenLimit', String(val));
   }
 
+  async function saveUserFacts(val: string) {
+    userFacts.value = val;
+    await putSetting('userFacts', val);
+  }
+
   function toggleDarkMode() {
     darkMode.value = !darkMode.value;
     Dark.set(darkMode.value);
@@ -88,6 +96,7 @@ export const useSettingsStore = defineStore('settings', () => {
     model,
     summaryModel,
     tokenLimit,
+    userFacts,
     darkMode,
     load,
     saveEndpoint,
@@ -95,6 +104,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveModel,
     saveSummaryModel,
     saveTokenLimit,
+    saveUserFacts,
     toggleDarkMode,
   };
 });
