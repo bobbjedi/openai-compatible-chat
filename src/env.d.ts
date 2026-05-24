@@ -9,3 +9,9 @@ declare namespace NodeJS {
 interface Crypto {
   randomUUID(): `${string}-${string}-${string}-${string}-${string}`;
 }
+
+// Web Speech API: Chromium exposes the webkit prefix
+interface Window {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  webkitSpeechRecognition: any;
+}

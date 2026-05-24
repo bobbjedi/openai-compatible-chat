@@ -895,3 +895,39 @@ body.body--dark .chatgpt-facts-banner-body {
 body.body--dark .chatgpt-facts-text-small {
   color: #d1d5db;
 }
+
+/* ---- Voice input mic button ---- */
+.chatgpt-mic-btn--listening {
+  animation: chatgpt-mic-pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.5);
+}
+
+@keyframes chatgpt-mic-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(229, 57, 53, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0);
+  }
+}
+
+/* Dark: mic button */
+body.body--dark .chatgpt-mic-btn--listening {
+  animation: chatgpt-mic-pulse-dark 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(239, 83, 80, 0.5);
+}
+
+@keyframes chatgpt-mic-pulse-dark {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 83, 80, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(239, 83, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 83, 80, 0);
+  }
+}
