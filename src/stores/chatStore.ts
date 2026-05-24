@@ -8,6 +8,7 @@ import {
   putSession,
   putMessage,
   deleteSession,
+  deleteMessage,
 } from 'src/services/db';
 import { streamChat, type LlmMessage } from 'src/services/llmProvider';
 import { useSettingsStore } from './settingsStore';
@@ -186,6 +187,77 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming.value = false;
   }
 
+  async function editMessage(messageId: number, newText: string) {
+    const idx = messages.value.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+
+    // Удаляем все сообщения после редактируемого (из IndexedDB)
+    const removed = messages.value.splice(idx + 1);
+    await Promise.all(removed.map((m) => { if (m.id) deleteMessage(m.id); }));
+
+    // Обновляем текст редактируемого сообщения
+    messages.value[idx].content = newText;
+    if (messages.value[idx].id) {
+      await putMessage({ ...toRaw(messages.value[idx]) });
+    }
+
+    // Теперь отправляем как новое — переиспользуем логику sendMessage,
+    // но без создания нового user-сообщения
+    const settings = useSettingsStore();
+    await settings.load();
+
+    if (!settings.apiKey) {
+      error.value = 'API-ключ не задан.';
+      return;
+    }
+
+    const sid = currentSessionId.value!;
+    error.value = null;
+
+    const assistantMsg: Message = {
+      sessionId: sid,
+      role: 'assistant',
+      content: '',
+      createdAt: Date.now(),
+    };
+    const assistantId = await putMessage(assistantMsg);
+    assistantMsg.id = assistantId;
+    messages.value.push(assistantMsg);
+
+    const llmMessages: LlmMessage[] = messages.value
+      .filter((m) => m.role === 'user' || m.content !== '')
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    isStreaming.value = true;
+    abortController = new AbortController();
+
+    const aidx = messages.value.findIndex((m) => m.id === assistantId);
+
+    try {
+      await streamChat(
+        {
+          endpoint: settings.endpoint, apiKey: settings.apiKey, model: settings.model, messages: llmMessages,
+        },
+        {
+          onChunk(delta: string) {
+            if (aidx >= 0) messages.value[aidx].content += delta;
+          },
+          onDone() {
+            if (aidx >= 0) putMessage({ ...toRaw(messages.value[aidx]) });
+          },
+          onError(err: Error) {
+            error.value = err.message;
+            if (aidx >= 0 && !messages.value[aidx].content) messages.value.splice(aidx, 1);
+          },
+        },
+        abortController.signal,
+      );
+    } finally {
+      isStreaming.value = false;
+      abortController = null;
+    }
+  }
+
   // --- Initialization ---
 
   async function init() {
@@ -214,6 +286,7 @@ export const useChatStore = defineStore('chat', () => {
     // message actions
     sendMessage,
     cancelStream,
+    editMessage,
     // init
     init,
   };

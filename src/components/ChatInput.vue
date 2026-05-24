@@ -1,17 +1,21 @@
 <template>
-    <div class="chat-input">
-        <q-input v-model="text" outlined dense autogrow placeholder="Введите сообщение..." :disable="store.isStreaming"
-            @keydown.enter.prevent="submit" @keydown.tab.prevent="submit">
-            <template #append>
-                <q-btn v-if="store.isStreaming" flat dense round icon="stop" color="negative"
-                    @click="store.cancelStream()">
-                    <q-tooltip>Остановить генерацию</q-tooltip>
-                </q-btn>
-                <q-btn v-else flat dense round icon="send" color="primary" :disable="!text.trim()" @click="submit">
-                    <q-tooltip>Отправить</q-tooltip>
-                </q-btn>
-            </template>
-        </q-input>
+    <div class="chatgpt-input-wrapper">
+        <div class="chatgpt-input-inner">
+            <q-input v-model="text" outlined dense autogrow placeholder="Message ChatGPT..."
+                :disable="store.isStreaming" class="chatgpt-input" @keydown.enter.exact.prevent="submit">
+                <template #append>
+                    <q-btn v-if="store.isStreaming" flat dense round size="sm" icon="stop" color="black"
+                        @click="store.cancelStream()">
+                        <q-tooltip>Stop</q-tooltip>
+                    </q-btn>
+                    <q-btn v-else flat dense round size="sm" icon="arrow_upward" color="black" :disable="!text.trim()"
+                        class="chatgpt-send-btn" @click="submit" />
+                </template>
+            </q-input>
+            <p class="chatgpt-disclaimer text-caption text-grey-6">
+                ChatGPT can make mistakes. Check important info.
+            </p>
+        </div>
     </div>
 </template>
 
@@ -36,9 +40,3 @@ export default defineComponent({
     },
 });
 </script>
-
-<style scoped>
-.chat-input {
-    padding: 8px 12px;
-}
-</style>

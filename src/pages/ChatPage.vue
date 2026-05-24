@@ -1,17 +1,13 @@
 <template>
-    <q-page class="chat-page">
-        <!-- Header bar -->
-        <q-bar class="bg-primary text-white">
+    <q-page class="chatgpt-page">
+        <!-- Header -->
+        <q-bar class="chatgpt-bar">
             <div class="text-subtitle2 ellipsis">
-                {{ store.currentSession?.title || 'DeepSeek Chat' }}
+                {{ store.currentSession?.title || 'ChatGPT' }}
             </div>
-            <q-space />
-            <q-btn flat dense round icon="settings" @click="showSettings = true">
-                <q-tooltip>Настройки</q-tooltip>
-            </q-btn>
         </q-bar>
 
-        <!-- Error banner -->
+        <!-- Error -->
         <q-banner v-if="store.error" dense class="bg-negative text-white">
             {{ store.error }}
             <template #action>
@@ -19,180 +15,186 @@
             </template>
         </q-banner>
 
-        <!-- Messages area -->
-        <div ref="scrollRef" class="messages-area q-pa-sm">
-            <!-- Empty state -->
-            <div v-if="store.displayMessages.length === 0 && !store.isStreaming"
-                class="empty-state column items-center justify-center">
-                <q-icon name="chat" size="4rem" color="grey-5" />
-                <p class="text-grey-6 text-body1 q-mt-md">
-                    {{ store.sessions.length === 0
-                        ? 'Нажмите "+" в сайдбаре чтобы создать новый чат'
-                        : 'Введите сообщение чтобы начать' }}
-                </p>
+        <!-- Messages -->
+        <div ref="scrollRef" class="chatgpt-messages">
+            <div v-if="store.displayMessages.length === 0
+                && !store.isStreaming" class="chatgpt-welcome">
+                <div class="chatgpt-welcome-logo">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="12" fill="#10a37f" />
+                        <path d="M24 14L26.472 21.528H34L27.764 26.472
+              L30.236 34L24 29.056L17.764 34L20.236
+              26.472L14 21.528H21.528L24 14Z" fill="white" />
+                    </svg>
+                </div>
+                <h1 class="chatgpt-welcome-title">How can I help you?</h1>
             </div>
 
-            <!-- Messages list -->
-            <q-chat-message v-for="msg in store.displayMessages" :key="msg.id" :name="msg.role === 'user' ? 'Вы' : 'AI'"
-                :sent="msg.role === 'user'" :stamp="formatTime(msg.createdAt)" :text="[]"
-                :bg-color="msg.role === 'user' ? 'primary' : 'grey-4'"
-                :text-color="msg.role === 'user' ? 'white' : 'black'">
-                <div v-if="msg.role === 'assistant'" class="markdown-body"
-                    v-html="renderMarkdown(msg.content || '_..._')" />
-                <div v-else>{{ msg.content }}</div>
-            </q-chat-message>
+            <!-- Message list -->
+            <div v-for="(msg, i) in store.displayMessages" :key="msg.id" class="chatgpt-msg-row" :class="msg.role === 'assistant'
+                ? 'chatgpt-msg--assistant'
+                : 'chatgpt-msg--user'">
+                <div class="chatgpt-msg-inner">
+                    <div class="chatgpt-avatar">
+                        <div v-if="msg.role === 'assistant'" class="chatgpt-avatar-assistant">
+                            <svg width="20" height="20" viewBox="0 0 48 48">
+                                <rect width="48" height="48" rx="12" fill="#10a37f" />
+                                <path d="M24 14L26.472 21.528H34L27.764
+                  26.472L30.236 34L24 29.056L17.764 34
+                  L20.236 26.472L14 21.528H21.528L24 14Z" fill="white" />
+                            </svg>
+                        </div>
+                        <q-avatar v-else color="primary" size="32px" text-color="white" class="chatgpt-avatar-user">
+                            <svg width="20" height="20" viewBox="0 0 24 24">
+                                <path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4
+                  1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8
+                  1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                            </svg>
+                        </q-avatar>
+                    </div>
+                    <div class="chatgpt-msg-content">
+                        <div class="chatgpt-msg-author">
+                            {{ msg.role === 'assistant' ? 'ChatGPT' : 'You' }}
+                        </div>
+                        <!-- Edit mode for user messages -->
+                        <div v-if="editingId === msg.id" class="chatgpt-edit-area">
+                            <q-input v-model="editText" outlined dense autogrow type="textarea"
+                                class="chatgpt-edit-input" @keydown.ctrl.enter="saveEdit(msg.id!)" />
+                            <div class="chatgpt-edit-actions">
+                                <q-btn flat size="sm" label="Cancel" @click="cancelEdit" />
+                                <q-btn flat size="sm" color="primary" label="Save & Submit" :disable="!editText.trim()"
+                                    @click="saveEdit(msg.id!)" />
+                            </div>
+                            <div class="chatgpt-edit-hint text-caption text-grey-6">
+                                Ctrl+Enter to submit
+                            </div>
+                        </div>
+                        <div v-else>
+                            <div v-if="msg.role === 'assistant'" class="chatgpt-markdown" v-html="renderMarkdown(
+                                msg.content || '_..._')" />
+                            <div v-else class="chatgpt-text">
+                                {{ msg.content }}
+                            </div>
+                        </div>
+                        <!-- Edit button for user messages (not in edit mode, not streaming) -->
+                        <div v-if="msg.role === 'user' && editingId !== msg.id && !store.isStreaming
+                            && i === store.displayMessages.length - 1" class="chatgpt-edit-btn-row">
+                            <q-btn flat dense size="sm" icon="edit" color="grey-6" @click="startEdit(msg)">
+                                <q-tooltip>Edit</q-tooltip>
+                            </q-btn>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Streaming indicator -->
-            <div v-if="store.isStreaming" class="row items-center q-pa-sm text-grey-6">
-                <q-spinner-dots size="1.5rem" />
-                <span class="q-ml-sm">Генерация...</span>
+            <div v-if="store.isStreaming" class="chatgpt-msg-row chatgpt-msg--assistant">
+                <div class="chatgpt-msg-inner">
+                    <div class="chatgpt-avatar">
+                        <div class="chatgpt-avatar-assistant">
+                            <svg width="20" height="20" viewBox="0 0 48 48">
+                                <rect width="48" height="48" rx="12" fill="#10a37f" />
+                                <path d="M24 14L26.472 21.528H34L27.764
+                  26.472L30.236 34L24 29.056L17.764 34
+                  L20.236 26.472L14 21.528H21.528L24 14Z" fill="white" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="chatgpt-msg-content">
+                        <q-spinner-dots size="1rem" color="grey-6" />
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Input -->
         <ChatInput />
-
-        <!-- Settings dialog -->
-        <SettingsDialog v-model="showSettings" />
     </q-page>
 </template>
 
 <script lang="ts">
 import {
-    defineComponent,
-    ref,
-    watch,
-    nextTick,
-    onMounted,
+    defineComponent, ref, watch,
+    nextTick, onMounted,
 } from 'vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { useChatStore } from 'src/stores/chatStore';
+import { useChatStore, type Message } from 'src/stores/chatStore';
 import ChatInput from 'src/components/ChatInput.vue';
-import SettingsDialog from 'src/components/SettingsDialog.vue';
 
 export default defineComponent({
     name: 'ChatPage',
-    components: { ChatInput, SettingsDialog },
+    components: { ChatInput },
     setup() {
         const store = useChatStore();
         const scrollRef = ref<HTMLElement | null>(null);
-        const showSettings = ref(false);
+        const editingId = ref<number | null>(null);
+        const editText = ref('');
 
-        // Инициализация
         onMounted(async () => {
             await store.init();
         });
-
-        function formatTime(ts: number): string {
-            return new Date(ts).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-            });
-        }
 
         function renderMarkdown(text: string): string {
             const raw = marked.parse(text, { async: false }) as string;
             return DOMPurify.sanitize(raw);
         }
 
-        // Авто-скролл при новых сообщениях
+        function scrollToBottom() {
+            const el = scrollRef.value;
+            if (el) el.scrollTop = el.scrollHeight;
+        }
+
         watch(
             () => store.displayMessages.length,
-            async () => {
-                await nextTick();
-                const el = scrollRef.value;
-                if (el) {
-                    el.scrollTop = el.scrollHeight;
-                }
-            },
+            () => nextTick().then(scrollToBottom),
         );
 
-        // Авто-скролл во время стриминга
         watch(
             () => {
                 const msgs = store.displayMessages;
-                return msgs.length > 0
-                    ? msgs[msgs.length - 1].content
-                    : '';
+                return msgs.length > 0 ? msgs[msgs.length - 1].content : '';
             },
-            async () => {
-                await nextTick();
-                const el = scrollRef.value;
-                if (el) {
-                    const isNearBottom =
-                        el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-                    if (isNearBottom || store.isStreaming) {
-                        el.scrollTop = el.scrollHeight;
+            () => {
+                nextTick().then(() => {
+                    const el = scrollRef.value;
+                    if (el) {
+                        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                        if (nearBottom || store.isStreaming) el.scrollTop = el.scrollHeight;
                     }
-                }
+                });
             },
         );
+
+        function startEdit(msg: Message) {
+            editingId.value = msg.id!;
+            editText.value = msg.content;
+        }
+
+        function cancelEdit() {
+            editingId.value = null;
+            editText.value = '';
+        }
+
+        async function saveEdit(messageId: number) {
+            const text = editText.value.trim();
+            if (!text) return;
+            editingId.value = null;
+            editText.value = '';
+            await store.editMessage(messageId, text);
+            nextTick().then(scrollToBottom);
+        }
 
         return {
             store,
             scrollRef,
-            showSettings,
-            formatTime,
             renderMarkdown,
+            editingId,
+            editText,
+            startEdit,
+            cancelEdit,
+            saveEdit,
         };
     },
 });
 </script>
-
-<style scoped>
-.chat-page {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
-.messages-area {
-    flex: 1;
-    overflow-y: auto;
-}
-
-.empty-state {
-    height: 100%;
-    min-height: 300px;
-}
-
-.markdown-body {
-    line-height: 1.6;
-}
-
-/* Базовые стили markdown */
-.markdown-body :deep(pre) {
-    background: rgba(0, 0, 0, 0.08);
-    padding: 8px 12px;
-    border-radius: 4px;
-    overflow-x: auto;
-    font-size: 0.9em;
-}
-
-.markdown-body :deep(code) {
-    font-family: monospace;
-    font-size: 0.9em;
-}
-
-.markdown-body :deep(p) {
-    margin: 0 0 0.5em 0;
-}
-
-.markdown-body :deep(p:last-child) {
-    margin-bottom: 0;
-}
-
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
-    padding-left: 1.5em;
-    margin: 0.3em 0;
-}
-
-.markdown-body :deep(blockquote) {
-    border-left: 3px solid rgba(0, 0, 0, 0.2);
-    padding-left: 0.8em;
-    margin: 0.3em 0;
-    opacity: 0.8;
-}
-</style>

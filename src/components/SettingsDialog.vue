@@ -1,36 +1,37 @@
 <template>
     <q-dialog v-model="visible" persistent>
-        <q-card style="min-width: 420px">
+        <q-card class="chatgpt-dialog" style="min-width: 420px">
             <q-card-section class="row items-center q-pb-none">
-                <div class="text-h6">Настройки</div>
+                <div class="text-h6">Settings</div>
                 <q-space />
                 <q-btn flat round dense icon="close" v-close-popup />
             </q-card-section>
 
             <q-card-section class="q-gutter-md">
                 <q-input v-model="localEndpoint" outlined dense label="API Endpoint"
-                    hint="Например: https://api.deepseek.com/v1" />
+                    hint="e.g. https://api.deepseek.com/v1" />
                 <q-input v-model="localApiKey" outlined dense label="API Key" :type="showKey ? 'text' : 'password'"
-                    hint="Ваш API-ключ">
+                    hint="Your API key">
                     <template #append>
                         <q-btn flat dense round :icon="showKey ? 'visibility_off' : 'visibility'"
                             @click="showKey = !showKey" />
                     </template>
                 </q-input>
-                <q-input v-model="localModel" outlined dense label="Модель"
-                    hint="Например: deepseek-chat, gpt-4o-mini" />
+                <q-input v-model="localModel" outlined dense label="Model" hint="e.g. deepseek-chat, gpt-4o-mini" />
             </q-card-section>
 
             <q-card-actions align="right">
-                <q-btn flat label="Отмена" v-close-popup />
-                <q-btn flat label="Сохранить" color="primary" :disable="!isValid" @click="save" />
+                <q-btn flat label="Cancel" v-close-popup />
+                <q-btn flat label="Save" color="primary" :disable="!isValid" @click="save" />
             </q-card-actions>
         </q-card>
     </q-dialog>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch } from 'vue';
+import {
+    defineComponent, ref, computed, watch,
+} from 'vue';
 import { useSettingsStore } from 'src/stores/settingsStore';
 
 export default defineComponent({
@@ -61,10 +62,8 @@ export default defineComponent({
             }
         });
 
-        const isValid = computed(() =>
-            localEndpoint.value.trim().length > 0
-            && localModel.value.trim().length > 0,
-        );
+        const isValid = computed(() => localEndpoint.value.trim().length > 0
+            && localModel.value.trim().length > 0);
 
         async function save() {
             await Promise.all([

@@ -1,24 +1,23 @@
-// Quasar SCSS (& Sass) Variables
-// --------------------------------------------------
-// To customize the look and feel of this app, you can override
-// the Sass/SCSS variables found in Quasar's source Sass/SCSS files.
-
-// Check documentation for full list of Quasar variables
-
-// Your own variables (that are declared here) and Quasar's own
-// ones will be available out of the box in your .vue/.scss/.sass files
-
-// It's highly recommended to change the default colors
-// to match your app's branding.
-// Tip: Use the "Theme Builder" on Quasar's documentation website.
-
-$primary   : #1976D2;
+// ChatGPT-style color scheme
+$primary   : #10a37f;
 $secondary : #26A69A;
-$accent    : #9C27B0;
+$accent    : #6366f1;
 
 $dark      : #1D1D1D;
+$dark-page : #171717;
 
 $positive  : #21BA45;
-$negative  : #C10015;
-$info      : #31CCEC;
+$negative  : #EF4444;
+$info      : #3B82F6;
 $warning   : #F2C037;
+
+// Custom ChatGPT colors
+$chat-sidebar-bg: #171717;
+$chat-sidebar-text: #ECECF1;
+$chat-sidebar-hover: #2A2B32;
+$chat-sidebar-active: #343541;
+$chat-msg-user-bg: #FFFFFF;
+$chat-msg-assistant-bg: #F7F7F8;
+$chat-border: #E5E5E5;
+$chat-text-primary: #1F1F1F;
+$chat-text-secondary: #6B6B80;

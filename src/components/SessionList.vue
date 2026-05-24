@@ -1,50 +1,66 @@
 <template>
-    <div class="session-list">
-        <div class="session-list-header row items-center justify-between q-pa-sm">
-            <div class="text-subtitle2 text-grey-7">Сессии</div>
-            <q-btn flat dense round icon="add" color="primary" @click="store.createSession()">
-                <q-tooltip>Новый чат</q-tooltip>
+    <div class="chatgpt-sessions">
+        <!-- New chat button -->
+        <div class="q-pa-sm">
+            <q-btn no-caps class="chatgpt-new-btn full-width" @click="store.createSession()">
+                <q-icon name="add" size="xs" class="q-mr-sm" />
+                <span>New chat</span>
             </q-btn>
         </div>
 
-        <q-list separator>
-            <q-item v-for="s in store.sessions" :key="s.id" clickable v-ripple :active="s.id === store.currentSessionId"
-                active-class="bg-primary text-white" @click="store.selectSession(s.id)">
-                <q-item-section>
-                    <q-item-label lines="1">{{ s.title }}</q-item-label>
-                    <q-item-label caption :lines="1">
-                        {{ formatDate(s.updatedAt) }}
-                    </q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                    <q-btn flat dense round size="sm" icon="more_vert" @click.stop>
-                        <q-menu auto-close anchor="bottom end" self="top end">
-                            <q-list dense>
-                                <q-item clickable @click="startRename(s)">
-                                    <q-item-section>Переименовать</q-item-section>
-                                </q-item>
-                                <q-item clickable @click="store.removeSession(s.id)">
-                                    <q-item-section class="text-negative">Удалить</q-item-section>
-                                </q-item>
-                            </q-list>
-                        </q-menu>
-                    </q-btn>
-                </q-item-section>
-            </q-item>
-        </q-list>
+        <!-- Session list -->
+        <q-scroll-area class="chatgpt-sessions-scroll">
+            <q-list dense>
+                <q-item v-for="s in store.sessions" :key="s.id" clickable v-ripple
+                    :active="s.id === store.currentSessionId" active-class="chatgpt-session--active"
+                    class="chatgpt-session q-mx-xs" @click="store.selectSession(s.id)">
+                    <q-item-section avatar class="q-mr-xs">
+                        <q-icon name="chat_bubble_outline" size="xs" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label lines="1" class="chatgpt-session-title">
+                            {{ s.title }}
+                        </q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-btn flat dense round size="0.5rem" icon="more_horiz" class="chatgpt-session-more"
+                            @click.stop>
+                            <q-menu auto-close anchor="bottom end" self="top end" class="chatgpt-menu">
+                                <q-list dense>
+                                    <q-item clickable @click="startRename(s)">
+                                        <q-item-section>Rename</q-item-section>
+                                    </q-item>
+                                    <q-item clickable @click="store.removeSession(s.id)">
+                                        <q-item-section class="text-negative">
+                                            Delete
+                                        </q-item-section>
+                                    </q-item>
+                                </q-list>
+                            </q-menu>
+                        </q-btn>
+                    </q-item-section>
+                </q-item>
+            </q-list>
 
+            <div v-if="store.sessions.length === 0" class="chatgpt-empty text-center q-pa-lg">
+                <p class="text-caption text-grey">No conversations yet</p>
+            </div>
+        </q-scroll-area>
+
+        <!-- Rename dialog -->
         <q-dialog v-model="renameDialog" persistent>
-            <q-card style="min-width: 300px">
+            <q-card class="chatgpt-dialog" style="min-width: 300px">
                 <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Переименовать сессию</div>
+                    <div class="text-h6">Rename</div>
                     <q-space />
                     <q-btn flat round dense icon="close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
-                    <q-input v-model="renameTitle" dense outlined autofocus @keydown.enter.prevent="confirmRename" />
+                    <q-input v-model="renameTitle" dense outlined autofocus label="Chat name"
+                        @keydown.enter.prevent="confirmRename" />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat label="Отмена" v-close-popup />
+                    <q-btn flat label="Cancel" v-close-popup />
                     <q-btn flat label="OK" color="primary" @click="confirmRename" />
                 </q-card-actions>
             </q-card>
@@ -64,10 +80,6 @@ export default defineComponent({
         const renameId = ref<string | null>(null);
         const renameTitle = ref('');
 
-        function formatDate(ts: number): string {
-            return new Date(ts).toLocaleString();
-        }
-
         function startRename(s: Session) {
             renameId.value = s.id;
             renameTitle.value = s.title;
@@ -76,7 +88,10 @@ export default defineComponent({
 
         async function confirmRename() {
             if (renameId.value && renameTitle.value.trim()) {
-                await store.renameSession(renameId.value, renameTitle.value.trim());
+                await store.renameSession(
+                    renameId.value,
+                    renameTitle.value.trim(),
+                );
             }
             renameDialog.value = false;
         }
@@ -85,17 +100,9 @@ export default defineComponent({
             store,
             renameDialog,
             renameTitle,
-            formatDate,
             startRename,
             confirmRename,
         };
     },
 });
 </script>
-
-<style scoped>
-.session-list-header {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-    min-height: 48px;
-}
-</style>
