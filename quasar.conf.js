@@ -150,13 +150,13 @@ module.exports = configure((ctx) => ({
     },
 
     manifest: {
-      name: 'Quasar App',
-      short_name: 'Quasar App',
-      description: 'A Quasar Framework app',
+      name: 'OpenAI-Compatible Chat',
+      short_name: 'ChatGPT',
+      description: 'ChatGPT-like SPA for any OpenAI-compatible API',
       display: 'standalone',
       orientation: 'portrait',
       background_color: '#ffffff',
-      theme_color: '#027be3',
+      theme_color: '#10a37f',
       icons: [
         {
           src: 'icons/icon-128x128.png',

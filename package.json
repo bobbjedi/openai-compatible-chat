@@ -1,8 +1,8 @@
 {
   "name": "chat",
   "version": "0.0.1",
-  "description": "A Quasar Framework app",
-  "productName": "Quasar App",
+  "description": "ChatGPT-like SPA for any OpenAI-compatible API. Voice input, rolling summaries, user facts.",
+  "productName": "OpenAI-Compatible Chat",
   "author": "bobbjedi <bobbrownjedi@gmail.com>",
   "private": true,
   "scripts": {
@@ -37,7 +37,8 @@
     "eslint-config-airbnb-base": "^14.0.0",
     "eslint-plugin-import": "^2.20.1",
     "eslint-plugin-vue": "^7.0.0",
-    "sass-loader": "13"
+    "sass-loader": "13",
+    "workbox-webpack-plugin": "^6.0.0"
   },
   "browserslist": [
     "last 10 Chrome versions",
