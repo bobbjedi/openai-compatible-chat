@@ -1,4 +1,4 @@
-<template>
+е<template>
     <q-dialog v-model="visible" persistent>
         <q-card class="chatgpt-dialog" style="min-width: 420px">
             <q-card-section class="row items-center q-pb-none">

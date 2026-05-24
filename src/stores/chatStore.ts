@@ -28,7 +28,13 @@ export const useChatStore = defineStore('chat', () => {
   // --- Getters ---
   const currentSession = computed(() => sessions.value.find((s) => s.id === currentSessionId.value) ?? null);
 
-  const displayMessages = computed(() => messages.value.filter((m) => m.role !== 'system'));
+  const displayMessages = computed(() => messages.value.filter((m) => {
+    if (m.role === 'system') return false;
+    // Скрываем пустое assistant-сообщение во время стриминга —
+    // вместо него показывается спиннер в шаблоне
+    if (m.role === 'assistant' && !m.content && isStreaming.value) return false;
+    return true;
+  }));
 
   // --- Session management ---
 

@@ -54,7 +54,7 @@
                     </div>
                     <div class="chatgpt-msg-content">
                         <div class="chatgpt-msg-author">
-                            {{ msg.role === 'assistant' ? 'ChatGPT' : 'You' }}
+                            {{ msg.role === 'assistant' ? 'LLM' : 'You' }}
                         </div>
                         <!-- Edit mode for user messages -->
                         <div v-if="editingId === msg.id" class="chatgpt-edit-area">
@@ -87,8 +87,8 @@
                 </div>
             </div>
 
-            <!-- Streaming indicator -->
-            <div v-if="store.isStreaming" class="chatgpt-msg-row chatgpt-msg--assistant">
+            <!-- Streaming indicator: only when last assistant msg is still empty -->
+            <div v-if="store.isStreaming && !lastAssistantContent" class="chatgpt-msg-row chatgpt-msg--assistant">
                 <div class="chatgpt-msg-inner">
                     <div class="chatgpt-avatar">
                         <div class="chatgpt-avatar-assistant">
@@ -114,7 +114,7 @@
 
 <script lang="ts">
 import {
-    defineComponent, ref, watch,
+    defineComponent, ref, watch, computed,
     nextTick, onMounted,
 } from 'vue';
 import { marked } from 'marked';
@@ -166,6 +166,14 @@ export default defineComponent({
             },
         );
 
+        const lastAssistantContent = computed(() => {
+            const msgs = store.messages;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                if (msgs[i].role === 'assistant') return !!msgs[i].content;
+            }
+            return false;
+        });
+
         function startEdit(msg: Message) {
             editingId.value = msg.id!;
             editText.value = msg.content;
@@ -191,6 +199,7 @@ export default defineComponent({
             renderMarkdown,
             editingId,
             editText,
+            lastAssistantContent,
             startEdit,
             cancelEdit,
             saveEdit,
