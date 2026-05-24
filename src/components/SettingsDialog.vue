@@ -37,7 +37,7 @@
         <div class="text-subtitle2 text-grey-8 q-mb-sm">Summary Model</div>
         <q-select v-model="localSummaryModel" outlined dense label="Model for summaries" :options="modelOptions"
           use-input input-debounce="0" behavior="dialog"
-          hint="Модель для генерации саммари (если не задана — используется основная)" @filter="filterModels" clearable>
+          hint="Model for summary generation (uses main model if not set)" @filter="filterModels" clearable>
           <template #no-option>
             <q-item>
               <q-item-section class="text-grey">

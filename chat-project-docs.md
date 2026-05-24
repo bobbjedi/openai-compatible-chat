@@ -86,7 +86,7 @@ src/
 | `key` (keyPath) | `string` | Ключ настройки |
 | `value` | `string` | Значение (всегда строка) |
 
-Ключи: `endpoint`, `apiKey`, `model`, `summaryModel`, `tokenLimit`
+Ключи: `endpoint`, `apiKey`, `model`, `summaryModel`, `tokenLimit`, `userFacts`
 
 > **Примечание**: `darkMode` вынесен из IndexedDB в `localStorage` для синхронного доступа (избежание мигания темы при загрузке).
 
@@ -126,6 +126,19 @@ User Input (ChatInput.vue)
 - **Кнопка Stop** — отмена стриминга через `AbortController`
 - **Отключено** во время стриминга
 - **Disclaimer**: «ChatGPT can make mistakes. Check important info.»
+- **Голосовой ввод** (кнопка микрофона в `#append` слоте):
+  - Использует Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`)
+  - Поддержка проверяется через `'SpeechRecognition' in window || 'webkitSpeechRecognition' in window`
+  - Кнопка микрофона показывается только если API доступен
+  - При активации: красная пульсирующая кнопка (CSS-анимация `pulse`), `recognition.start()`
+  - **Определение языка**: цепочка из трёх источников:
+    1. `navigator.languages` — упорядоченные предпочтения браузера
+    2. `Intl.DateTimeFormat().resolvedOptions().locale` — локаль ОС
+    3. `navigator.language` — язык интерфейса браузера
+    - Если любой источник начинается с `ru` → `ru-RU`, иначе `en-US`
+  - **Режим**: `continuous: true` + `interimResults: true`
+  - **Обработка результатов**: итерация от `event.resultIndex`, добавление только `isFinal`-фрагментов через `text.value += ' ${result} '`
+  - При потере фокуса/окончании: авто-остановка через `recognition.stop()`
 
 ```typescript
 // Ключевая логика
@@ -187,6 +200,11 @@ Flex-контейнер для корректного скролла:
 - **Загрузка из файла** — `q-file` для выбора `.txt` файла (макс. 1 MB), содержимое читается через `FileReader.readAsText()` и подставляется в поле ввода
 - **Save/Cancel** — сохраняет system prompt в текущую сессию через `chatStore.updateSystemPrompt()` и обновляет запись в IndexedDB (поле `systemPrompt` в объекте сессии)
 - При сохранении system prompt немедленно применяется — при следующей отправке сообщения он будет включён первым в payload
+- **Auto Summary** — переключатель (`q-toggle`) для включения/выключения авто-саммари диалога:
+  - При включении: `chatStore.updateSummaryEnabled(true)` — запускает механизм периодического саммари
+  - При выключении: `chatStore.updateSummaryEnabled(false)` — очищает существующее саммари
+  - Состояние хранится в `session.summaryEnabled` и персистится в IndexedDB
+  - Описание: «Preserves context of long conversations via periodic summarization»
 
 ---
 
@@ -206,6 +224,12 @@ Flex-контейнер для корректного скролла:
 Основная страница чата:
 - **Header** (`q-bar`) — название текущей сессии
 - **Баннер ошибок** — красный, с кнопкой закрытия
+- **Баннер фактов** (`.chatgpt-facts-banner`) — жёлтое информационное уведомление, появляется когда LLM обнаружил новые факты о пользователе во время саммаризации:
+  - Текст: «New facts about you were discovered during summarization»
+  - Кнопка «Review» — открывает диалог User Facts (в [`MainLayout`](src/layouts/MainLayout.vue))
+  - Кнопка закрытия (×) — скрывает баннер
+  - Автоматически скрывается при смене сессии
+  - Управляется через `chatStore.factsNotification` (boolean)
 - **Welcome screen** — логотип ChatGPT + «How can I help you?» (показывается когда нет сообщений и нет стриминга)
 - **Список сообщений** (`v-for` по `store.displayMessages`):
   - Каждое сообщение — строка с аватаром и контентом
@@ -276,16 +300,19 @@ Flex-контейнер для корректного скролла:
 | `endpoint` | `Ref<string>` | `https://api.deepseek.com/v1` | IndexedDB | Базовый URL API |
 | `apiKey` | `Ref<string>` | `''` | IndexedDB | API-ключ |
 | `model` | `Ref<string>` | `deepseek-chat` | IndexedDB | Название модели |
+| `summaryModel` | `Ref<string>` | `deepseek-chat` | IndexedDB | Модель для генерации саммари |
 | `tokenLimit` | `Ref<number>` | `200000` | IndexedDB | Лимит токенов контекста |
+| `userFacts` | `Ref<string>` | `''` | IndexedDB | Глобальная база знаний о пользователе |
 | `darkMode` | `Ref<boolean>` | `false` | **localStorage** | Тёмная тема |
 
 | Action | Описание |
 |--------|----------|
-| `load()` | Однократная загрузка endpoint/apiKey/model/tokenLimit из IndexedDB; `darkMode` читается из `localStorage` синхронно при инициализации |
+| `load()` | Однократная загрузка endpoint/apiKey/model/summaryModel/tokenLimit/userFacts из IndexedDB; `darkMode` читается из `localStorage` синхронно при инициализации |
 | `saveEndpoint(val)` | Сохранение endpoint |
 | `saveApiKey(val)` | Сохранение API-ключа |
 | `saveModel(val)` | Сохранение модели |
 | `saveTokenLimit(val)` | Сохранение лимита токенов (число, в IndexedDB как строка) |
+| `saveUserFacts(val)` | Сохранение глобальной базы знаний о пользователе |
 | `toggleDarkMode()` | Переключение темы: `Dark.set()`, синхронная запись в `localStorage` (`chatgpt-dark-mode`) |
 
 **Персистентность темы**: `darkMode` хранится в `localStorage` (ключ `chatgpt-dark-mode`), а не в IndexedDB. Это позволяет:
@@ -455,7 +482,61 @@ if (summary) {
 
 ---
 
-## 11. Решённые проблемы
+## 11. User Facts — глобальная база знаний о пользователе
+
+В дополнение к rolling summary реализована система накопления фактов о пользователе. Факты извлекаются LLM во время каждой саммаризации и сохраняются глобально (не привязаны к конкретной сессии).
+
+### Принцип работы
+
+```
+Диалог → maybeSummarize()
+  → генерация саммари диалога (как раньше)
+  → параллельно: извлечение новых фактов о пользователе из последних 20 сообщений
+  → слияние с существующей базой фактов (дедупликация, обновление противоречий)
+  → сохранение в settingsStore.userFacts → IndexedDB (ключ `userFacts`)
+```
+
+### Промпт для извлечения фактов
+
+LLM получает инструкцию:
+- Извлечь ТОЛЬКО факты о пользователе (предпочтения, привычки, контекст, интересы, проекты, технологии, личные данные)
+- Игнорировать факты об ассистенте, технические детали диалога, временные вопросы
+- Каждый факт — одна строка
+- Новые факты объединяются с существующими: дополнять, уточнять, удалять противоречивые
+- Если новых фактов нет — вернуть существующий список без изменений
+
+### Инжекция в контекст
+
+В [`buildTrimmedMessages()`](src/stores/chatStore.ts:37) факты вставляются как system-сообщение сразу после system prompt (если он есть) и до остальных сообщений:
+
+```typescript
+// После system prompt и перед summary/сообщениями:
+if (settingsStore.userFacts.trim()) {
+  result.push({
+    role: 'system',
+    content: `[User Facts — long-term knowledge about the user]\n${settingsStore.userFacts}`,
+  });
+}
+```
+
+### Управление фактами
+
+| Где | Что | Пояснение |
+|-----|-----|-----------|
+| [`MainLayout`](src/layouts/MainLayout.vue) | Кнопка «User Facts» в header | Открывает диалог просмотра/редактирования фактов |
+| Диалог User Facts | `q-dialog` с `q-input` (textarea) | Позволяет вручную редактировать факты, сохранение через `settingsStore.saveUserFacts()` |
+| [`ChatPage`](src/pages/ChatPage.vue) | Баннер уведомлений | Появляется когда обнаружены новые факты (`chatStore.factsNotification`) |
+
+### Отладочное логирование
+
+При извлечении фактов в консоль выводится:
+- Количество существующих фактов до обновления
+- Ответ LLM с новыми фактами
+- Количество фактов после обновления
+
+---
+
+## 12. Решённые проблемы
 
 | Проблема | Причина | Решение |
 |----------|---------|---------|
@@ -474,10 +555,13 @@ if (summary) {
 | Sidebar не сворачивался при выборе чата | Отсутствовала связь между `SessionList` и `MainLayout` | Emit `session-selected` из `SessionList`, обработчик в `MainLayout` устанавливает `leftDrawerOpen = false` |
 | Кнопка Edit только на последнем сообщении | Жёсткое условие `i === store.displayMessages.length - 1` | Убрано условие — теперь кнопка Edit на всех сообщениях пользователя |
 | Sass-предупреждение о nested rules | `sass` 1.77.8 предупреждает о declarations после nested rules в `quasar.sass` | Попытка подавления через `quietDeps` в `chainWebpack` приводила к ошибке webpack (`Cannot read properties of undefined`). Оставлено как есть — варнинг не критичен. |
+| Голосовой ввод выдаёт бессвязный текст | `continuous: true` + итерация с `i = 0` приводила к повторной обработке уже полученных результатов | Итерация от `event.resultIndex`, добавление только `isFinal`-фрагментов |
+| Распознавание всегда на английском | `navigator.language` возвращал `'en'` даже на русской системе | Цепочка из трёх источников: `navigator.languages` → `Intl.DateTimeFormat().resolvedOptions().locale` → `navigator.language` |
+| Ошибки TypeScript для Web Speech API | Нет типов для `SpeechRecognition` в DOM-типах | Минимальное объявление `Window { webkitSpeechRecognition: any }` в [`env.d.ts`](src/env.d.ts) + блочные `eslint-disable` для `any` |
 
 ---
 
-## 12. Конфигурация сборки
+## 13. Конфигурация сборки
 
 ### [`quasar.conf.js`](quasar.conf.js)
 
@@ -496,7 +580,7 @@ if (summary) {
 
 ---
 
-## 13. Скриншоты и демонстрация
+## 14. Скриншоты и демонстрация
 
 Сборка успешна. Запуск dev-сервера:
 

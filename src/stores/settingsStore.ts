@@ -17,7 +17,7 @@ function saveDarkMode(val: boolean): void {
   try {
     localStorage.setItem(DARK_MODE_KEY, String(val));
   } catch {
-    // localStorage недоступен — игнорируем
+    // localStorage unavailable — ignore
   }
 }
 
@@ -30,7 +30,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const userFacts = ref('');
   const darkMode = ref(loadDarkMode());
 
-  // Применяем тему сразу при инициализации стора
+  // Apply theme immediately on store init
   Dark.set(darkMode.value);
 
   let loaded = false;

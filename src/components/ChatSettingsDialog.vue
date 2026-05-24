@@ -12,8 +12,8 @@
                 <div class="row items-center q-mb-sm">
                     <div>
                         <div class="text-subtitle2 text-grey-8">Auto Summary</div>
-                        <div class="text-caption text-grey-6">Сохраняет контекст длинных диалогов через периодическое
-                            саммари</div>
+                        <div class="text-caption text-grey-6">Preserves context of long conversations via periodic
+                            summarization</div>
                     </div>
                     <q-space />
                     <q-toggle v-model="localSummaryEnabled" color="primary" />
@@ -21,17 +21,17 @@
 
                 <q-separator spaced />
 
-                <!-- System prompt (инструкция) -->
+                <!-- System prompt -->
                 <div class="text-subtitle2 text-grey-8 q-mb-xs">System Prompt</div>
                 <q-input v-model="localPrompt" type="textarea" outlined dense autogrow
-                    placeholder="Введите инструкцию для модели (например: «Ты — полезный ассистент, отвечай кратко»)."
-                    hint="Передаётся как system-сообщение в начале каждого запроса." :rules="[]" :maxlength="10000"
+                    placeholder="Enter system instructions (e.g. «You are a helpful assistant, answer concisely»)."
+                    hint="Sent as a system message at the beginning of each request." :rules="[]" :maxlength="10000"
                     counter />
 
-                <!-- Загрузка из файла -->
+                <!-- Load from file -->
                 <div class="row items-center q-col-gutter-sm">
                     <div class="col">
-                        <q-file v-model="file" outlined dense label="Загрузить из файла (.txt)" accept=".txt,text/plain"
+                        <q-file v-model="file" outlined dense label="Load from file (.txt)" accept=".txt,text/plain"
                             max-file-size="1048576" @update:model-value="onFileSelected" clearable>
                             <template v-slot:prepend>
                                 <q-icon name="attach_file" />
@@ -73,7 +73,7 @@ export default defineComponent({
         const localSummaryEnabled = ref(false);
         const file = ref<File | null>(null);
 
-        // При открытии диалога заполняем текущим значением из активной сессии
+        // When dialog opens, populate with current values from active session
         watch(visible, (isOpen) => {
             if (isOpen) {
                 localPrompt.value = store.currentSession?.systemPrompt ?? '';
@@ -87,9 +87,9 @@ export default defineComponent({
             try {
                 const text = await f.text();
                 localPrompt.value = text.slice(0, 10000);
-                file.value = f; // сохраняем, чтобы q-file показал имя
+                file.value = f; // keep reference so q-file shows the name
             } catch {
-                // Ошибка чтения — игнорируем
+                // Read error — ignore
             }
         }
 

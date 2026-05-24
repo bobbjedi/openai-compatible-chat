@@ -35,9 +35,9 @@ interface SseChunk {
 }
 
 /**
- * Универсальный OpenAI-совместимый стриминговый клиент.
- * Работает с DeepSeek, OpenAI, и любыми прокси/API, поддерживающими
- * формат chat/completions с stream: true.
+ * Universal OpenAI-compatible streaming client.
+ * Works with DeepSeek, OpenAI, and any proxy/API that supports
+ * the chat/completions format with stream: true.
  */
 export async function streamChat(
   params: ChatParams,
@@ -110,13 +110,13 @@ export async function streamChat(
             callbacks.onChunk(delta.content);
           }
         } catch {
-          // Пропускаем строки с невалидным JSON
+          // Skip lines with invalid JSON
         }
       }
     }
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      // Нормальная отмена — всё что накопили уже отдали
+      // Normal abort — everything accumulated has already been emitted
       return;
     }
     callbacks.onError(err as Error);
@@ -135,7 +135,7 @@ interface ChatResponse {
 }
 
 /**
- * Не-стриминговый вызов (для авто-заголовков и т.п.)
+ * Non-streaming call (for auto-titles, etc.)
  */
 export async function chat(
   params: ChatParams,

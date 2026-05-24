@@ -30,7 +30,7 @@ export const useChatStore = defineStore('chat', () => {
   // --- Token budget helpers ---
 
   function estimateTokens(content: string): number {
-    // Грубая оценка: ~4 символа на токен (для рус/англ) + 4 токена overhead на сообщение
+    // Rough estimate: ~4 chars per token (for en/ru) + 4 tokens overhead per message
     return Math.ceil(content.length / 4) + 4;
   }
 
@@ -45,13 +45,13 @@ export const useChatStore = defineStore('chat', () => {
     const result: LlmMessage[] = [];
     let tokenBudget = 0;
 
-    // System prompt всегда первый и не обрезается
+    // System prompt always first and never trimmed
     if (systemPrompt) {
       result.push({ role: 'system', content: systemPrompt });
       tokenBudget += estimateTokens(systemPrompt);
     }
 
-    // User Facts — глобальная база знаний, инжектится после system prompt
+    // User Facts — global knowledge base, injected after system prompt
     if (userFacts) {
       result.push({
         role: 'system',
@@ -60,16 +60,16 @@ export const useChatStore = defineStore('chat', () => {
       tokenBudget += estimateTokens(userFacts) + 16;
     }
 
-    // Rolling summary — вставляется после system prompt как контекст всей истории
+    // Rolling summary — inserted after system prompt as conversation history context
     if (summary) {
       result.push({
         role: 'system',
-        content: `[Краткое содержание предыдущего диалога]\n${summary}`,
+        content: `[Summary of the conversation so far]\n${summary}`,
       });
       tokenBudget += estimateTokens(summary) + 16;
     }
 
-    // Собираем user/assistant с конца, пока не превысим лимит
+    // Collect user/assistant from the end, until we exceed the limit
     const eligible: { role: 'user' | 'assistant'; content: string }[] = [];
     messagesArr.forEach((m) => {
       if (m.role === 'user' || (m.role === 'assistant' && m.content !== '')) {
@@ -77,7 +77,7 @@ export const useChatStore = defineStore('chat', () => {
       }
     });
 
-    // Идём с конца, собираем пока укладываемся в бюджет
+    // Walk from the end, keep messages while within budget
     const kept: typeof eligible = [];
     for (let i = eligible.length - 1; i >= 0; i -= 1) {
       const cost = estimateTokens(eligible[i].content);
@@ -105,8 +105,8 @@ export const useChatStore = defineStore('chat', () => {
 
   const displayMessages = computed(() => messages.value.filter((m) => {
     if (m.role === 'system') return false;
-    // Скрываем пустое assistant-сообщение во время стриминга —
-    // вместо него показывается спиннер в шаблоне
+    // Hide empty assistant message during streaming —
+    // a spinner is shown in the template instead
     if (m.role === 'assistant' && !m.content && isStreaming.value) {
       return false;
     }
@@ -130,7 +130,7 @@ export const useChatStore = defineStore('chat', () => {
     const now = Date.now();
     const session: Session = {
       id,
-      title: title || 'Новый чат',
+      title: title || 'New Chat',
       createdAt: now,
       updatedAt: now,
     };
@@ -161,7 +161,7 @@ export const useChatStore = defineStore('chat', () => {
     await deleteSession(id);
     sessions.value = sessions.value.filter((s) => s.id !== id);
     if (currentSessionId.value === id) {
-      // Если есть другие сессии — переключаемся на первую
+      // If there are other sessions — switch to the first one
       if (sessions.value.length > 0) {
         await selectSession(sessions.value[0].id);
       } else {
@@ -173,30 +173,30 @@ export const useChatStore = defineStore('chat', () => {
 
   // --- Summary ---
 
-  const SUMMARY_TRIGGER_COUNT = 20; // каждые 20 user/assistant обменов
+  const SUMMARY_TRIGGER_COUNT = 20; // every 20 user/assistant exchanges
 
   async function maybeSummarize() {
     const session = sessions.value.find((s) => s.id === currentSessionId.value);
     if (!session) {
       // eslint-disable-next-line no-console
-      console.log('[maybeSummarize] Пропуск: нет активной сессии');
+      console.log('[maybeSummarize] Skip: no active session');
       return;
     }
     if (!session.summaryEnabled) {
       // eslint-disable-next-line no-console
-      console.log('[maybeSummarize] Пропуск: summaryEnabled выключен');
+      console.log('[maybeSummarize] Skip: summaryEnabled is off');
       return;
     }
 
     const userAssistantMsgs = messages.value.filter(
       (m) => m.role === 'user' || m.role === 'assistant',
     );
-    // Триггерим когда накопилось кратно SUMMARY_TRIGGER_COUNT новых сообщений
-    // (т.е. 20, 40, 60, ...)
+    // Trigger when we've accumulated a multiple of SUMMARY_TRIGGER_COUNT new messages
+    // (i.e. 20, 40, 60, ...)
     const nextTrigger = SUMMARY_TRIGGER_COUNT;
     if (userAssistantMsgs.length % nextTrigger !== 0) {
       // eslint-disable-next-line no-console
-      console.log(`[maybeSummarize] Пропуск: ${userAssistantMsgs.length} сообщений, ближайший триггер на ${Math.ceil(userAssistantMsgs.length / nextTrigger) * nextTrigger}`);
+      console.log(`[maybeSummarize] Skip: ${userAssistantMsgs.length} messages, next trigger at ${Math.ceil(userAssistantMsgs.length / nextTrigger) * nextTrigger}`);
       return;
     }
 
@@ -208,10 +208,10 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       const prevSummary = session.summary
-        ? `Предыдущее саммари:\n${session.summary}\n\n---\n`
+        ? `Previous summary:\n${session.summary}\n\n---\n`
         : '';
 
-      // Берём последние N сообщений для обновления саммари
+      // Take the last N messages for summary update
       const recentBatch = userAssistantMsgs.slice(-SUMMARY_TRIGGER_COUNT);
       const dialogueText = recentBatch
         .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
@@ -219,14 +219,14 @@ export const useChatStore = defineStore('chat', () => {
 
       const summaryModel = settings.summaryModel || settings.model;
 
-      const prompt = `Ты — ассистент, который составляет краткое содержание диалога.
-${prevSummary}Новые сообщения:
+      const prompt = `You are an assistant that writes conversation summaries.
+${prevSummary}New messages:
 ${dialogueText}
 
-Составь обновлённое краткое содержание всего диалога (сохрани ключевую информацию из предыдущего саммари и новых сообщений). Пиши на том же языке, на котором идёт диалог. Будь краток: не более 500 слов.`;
+Write an updated summary of the entire conversation (preserve key information from the previous summary and new messages). Write in the same language as the conversation. Be concise: no more than 500 words.`;
 
       // eslint-disable-next-line no-console
-      console.log('[maybeSummarize] Генерация саммари, модель:', summaryModel);
+      console.log('[maybeSummarize] Generating summary, model:', summaryModel);
       // eslint-disable-next-line no-console
       console.log('[maybeSummarize] Payload →', JSON.stringify({
         endpoint: settings.endpoint,
@@ -252,33 +252,33 @@ ${dialogueText}
         await putSession({ ...toRaw(session) });
 
         // eslint-disable-next-line no-console
-        console.log('[maybeSummarize] Саммари обновлено, длина:', newSummary.length);
+        console.log('[maybeSummarize] Summary updated, length:', newSummary.length);
       }
 
       // --- Extract / update User Facts ---
-      // Берём полный набор user/assistant сообщений для более широкого контекста
+      // Take the full set of user/assistant messages for broader context
       const allUserAssistant = messages.value.filter(
         (m) => m.role === 'user' || m.role === 'assistant',
       );
       if (allUserAssistant.length > 0 && settings.userFacts !== undefined) {
         try {
           const prevFacts = settings.userFacts
-            ? `Текущие известные факты о пользователе:\n${settings.userFacts}\n\n---\n`
+            ? `Current known facts about the user:\n${settings.userFacts}\n\n---\n`
             : '';
 
-          const factsPrompt = `Ты — ассистент, который ведёт "базу знаний" о пользователе (User Facts). Извлеки из диалога факты, которые влияют на будущие решения или имеют долгосрочную ценность: имя, предпочтения, питомцы, проекты, технологии, привычки, важные события, контекст работы и т.д.
+          const factsPrompt = `You are an assistant that maintains a "knowledge base" about the user (User Facts). Extract facts from the conversation that influence future decisions or have long-term value: name, preferences, pets, projects, technologies, habits, important events, work context, etc.
 
-**Критерий отбора:** факт должен сохраняться, только если он влияет на будущие решения или имеет долгосрочную ценность.
-✅ Пример факта: «Есть рыжий кот Лала, сдох примерно в мае 2025» — это долгосрочная информация о питомце.
-❌ Не факт: «Сегодня настроение паршивое» — временное состояние, не влияет на будущие диалоги.
+**Selection criteria:** a fact should be kept only if it influences future decisions or has long-term value.
+✅ Example of a fact: "Has a ginger cat named Lala, died around May 2025" — this is long-term information about a pet.
+❌ Not a fact: "I'm in a bad mood today" — a temporary state, does not affect future conversations.
 
-${prevFacts}Последний диалог:
+${prevFacts}Latest conversation:
 ${dialogueText}
 
-Обнови список фактов (сохрани старые, добавь новые, исправь противоречащие). Пиши на том же языке, что и диалог. Формат: маркдаун, краткие пункты. Не включай временные настроения, однодневные планы и тривиальную информацию.`;
+Update the facts list (keep old ones, add new ones, correct contradictions). Write in the same language as the conversation. Format: markdown, concise bullet points. Do not include temporary moods, one-day plans, or trivial information.`;
 
           // eslint-disable-next-line no-console
-          console.log('[maybeSummarize] Извлечение User Facts, модель:', summaryModel);
+          console.log('[maybeSummarize] Extracting User Facts, model:', summaryModel);
           // eslint-disable-next-line no-console
           console.log('[maybeSummarize] Facts payload →', JSON.stringify({
             endpoint: settings.endpoint,
@@ -301,19 +301,19 @@ ${dialogueText}
             await settings.saveUserFacts(newFacts.trim());
 
             // eslint-disable-next-line no-console
-            console.log('[maybeSummarize] User Facts обновлены, длина:', newFacts.length);
+            console.log('[maybeSummarize] User Facts updated, length:', newFacts.length);
 
-            // Показываем уведомление в чате
+            // Show notification in chat
             factsNotification.value = newFacts.trim();
           }
         } catch (factsErr) {
           // eslint-disable-next-line no-console
-          console.warn('[maybeSummarize] Ошибка извлечения фактов:', factsErr);
+          console.warn('[maybeSummarize] Error extracting facts:', factsErr);
         }
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn('[maybeSummarize] Ошибка генерации саммари:', err);
+      console.warn('[maybeSummarize] Error generating summary:', err);
     } finally {
       isSummarizing.value = false;
     }
@@ -326,7 +326,7 @@ ${dialogueText}
     if (!session) return;
     session.summaryEnabled = enabled;
     session.updatedAt = Date.now();
-    // При отключении очищаем существующее саммари
+    // Clear existing summary when disabling
     if (!enabled) {
       session.summary = undefined;
     }
@@ -340,11 +340,11 @@ ${dialogueText}
     await settings.load();
 
     if (!settings.apiKey) {
-      error.value = 'API-ключ не задан. Откройте настройки (шестерёнка) и введите ключ.';
+      error.value = 'API key not set. Open Settings (gear icon) and enter your key.';
       return;
     }
 
-    // Авто-создаём сессию если нет активной
+    // Auto-create session if none is active
     if (!currentSessionId.value) {
       await createSession(text.slice(0, 50));
     }
@@ -353,7 +353,7 @@ ${dialogueText}
     const now = Date.now();
     error.value = null;
 
-    // 1. Добавляем user-сообщение
+    // 1. Add user message
     const userMsg: Message = {
       sessionId: sid,
       role: 'user',
@@ -364,19 +364,19 @@ ${dialogueText}
     userMsg.id = userId;
     messages.value.push(userMsg);
 
-    // Авто-заголовок для новой сессии (по первому сообщению)
+    // Auto-title for new session (from first message)
     const session = sessions.value.find((s) => s.id === sid);
-    if (session && session.title === 'Новый чат') {
+    if (session && session.title === 'New Chat') {
       await renameSession(sid, text.slice(0, 50));
     }
 
-    // Обновляем updatedAt сессии
+    // Update session updatedAt
     if (session) {
       session.updatedAt = now;
       await putSession({ ...toRaw(session) });
     }
 
-    // 2. Создаём пустое assistant-сообщение
+    // 2. Create empty assistant message
     const assistantMsg: Message = {
       sessionId: sid,
       role: 'assistant',
@@ -387,7 +387,7 @@ ${dialogueText}
     assistantMsg.id = assistantId;
     messages.value.push(assistantMsg);
 
-    // 3. Формируем payload для API (с обрезкой по токенам из настроек)
+    // 3. Build API payload (with token trimming from settings)
     const llmMessages = buildTrimmedMessages(
       messages.value,
       session?.systemPrompt,
@@ -403,7 +403,7 @@ ${dialogueText}
       messages: llmMessages,
     }, null, 2));
 
-    // 4. Стриминг
+    // 4. Streaming
     isStreaming.value = true;
     abortController = new AbortController();
 
@@ -453,25 +453,25 @@ ${dialogueText}
     const idx = messages.value.findIndex((m) => m.id === messageId);
     if (idx < 0) return;
 
-    // Удаляем все сообщения после редактируемого (из IndexedDB)
+    // Delete all messages after the edited one (from IndexedDB)
     const removed = messages.value.splice(idx + 1);
     await Promise.all(removed.map((m) => {
       if (m.id) return deleteMessage(m.id);
       return undefined;
     }));
 
-    // Обновляем текст редактируемого сообщения
+    // Update the edited message text
     messages.value[idx].content = newText;
     if (messages.value[idx].id) {
       await putMessage({ ...toRaw(messages.value[idx]) });
     }
 
-    // Отправляем как новое — без создания нового user-сообщения
+    // Send as new — without creating a new user message
     const settings = useSettingsStore();
     await settings.load();
 
     if (!settings.apiKey) {
-      error.value = 'API-ключ не задан.';
+      error.value = 'API key not set.';
       return;
     }
 
@@ -489,7 +489,7 @@ ${dialogueText}
     messages.value.push(assistantMsg);
 
     const session = sessions.value.find((s) => s.id === sid);
-    // Формируем payload с обрезкой по токенам из настроек
+    // Build payload with token trimming from settings
     const llmMessages = buildTrimmedMessages(
       messages.value,
       session?.systemPrompt,
