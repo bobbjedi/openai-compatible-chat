@@ -31,6 +31,21 @@
 
         <q-input v-model.number="localTokenLimit" outlined dense label="Token Limit" type="number"
           hint="Max context tokens (default 200 000)" :min="1000" :max="2000000" step="1000" />
+
+        <q-separator spaced />
+
+        <div class="text-subtitle2 text-grey-8 q-mb-sm">Summary Model</div>
+        <q-select v-model="localSummaryModel" outlined dense label="Model for summaries" :options="modelOptions"
+          use-input input-debounce="0" behavior="dialog"
+          hint="Модель для генерации саммари (если не задана — используется основная)" @filter="filterModels" clearable>
+          <template #no-option>
+            <q-item>
+              <q-item-section class="text-grey">
+                No matching models
+              </q-item-section>
+            </q-item>
+          </template>
+        </q-select>
       </q-card-section>
 
       <q-card-actions align="right">
@@ -66,6 +81,7 @@ export default defineComponent({
     const localEndpoint = ref(store.endpoint);
     const localApiKey = ref(store.apiKey);
     const localModel = ref(store.model);
+    const localSummaryModel = ref(store.summaryModel);
     const localTokenLimit = ref(store.tokenLimit);
     const showKey = ref(false);
     const modelOptions = ref([...KNOWN_MODELS]);
@@ -81,6 +97,7 @@ export default defineComponent({
         localEndpoint.value = store.endpoint;
         localApiKey.value = store.apiKey;
         localModel.value = store.model;
+        localSummaryModel.value = store.summaryModel;
         localTokenLimit.value = store.tokenLimit;
       }
     });
@@ -110,6 +127,7 @@ export default defineComponent({
         store.saveEndpoint(localEndpoint.value.trim()),
         store.saveApiKey(localApiKey.value.trim()),
         store.saveModel(localModel.value.trim()),
+        store.saveSummaryModel(localSummaryModel.value.trim()),
         store.saveTokenLimit(localTokenLimit.value || 200000),
       ]);
       emit('update:modelValue', false);
@@ -119,6 +137,7 @@ export default defineComponent({
       localEndpoint,
       localApiKey,
       localModel,
+      localSummaryModel,
       localTokenLimit,
       showKey,
       modelOptions,

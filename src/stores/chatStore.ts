@@ -10,7 +10,7 @@ import {
   deleteSession,
   deleteMessage,
 } from 'src/services/db';
-import { streamChat, type LlmMessage } from 'src/services/llmProvider';
+import { streamChat, chat, type LlmMessage } from 'src/services/llmProvider';
 import { useSettingsStore } from './settingsStore';
 
 export { type Message, type Session };
@@ -22,6 +22,7 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<Message[]>([]);
   const isStreaming = ref(false);
   const error = ref<string | null>(null);
+  const isSummarizing = ref(false);
 
   let abortController: AbortController | null = null;
 
@@ -35,6 +36,7 @@ export const useChatStore = defineStore('chat', () => {
   function buildTrimmedMessages(
     messagesArr: Message[],
     systemPrompt?: string,
+    summary?: string,
     maxTokens?: number,
   ): LlmMessage[] {
     const limit = maxTokens || 200000;
@@ -45,6 +47,15 @@ export const useChatStore = defineStore('chat', () => {
     if (systemPrompt) {
       result.push({ role: 'system', content: systemPrompt });
       tokenBudget += estimateTokens(systemPrompt);
+    }
+
+    // Rolling summary — вставляется после system prompt как контекст всей истории
+    if (summary) {
+      result.push({
+        role: 'system',
+        content: `[Краткое содержание предыдущего диалога]\n${summary}`,
+      });
+      tokenBudget += estimateTokens(summary) + 16;
     }
 
     // Собираем user/assistant с конца, пока не превысим лимит
@@ -149,6 +160,111 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // --- Summary ---
+
+  const SUMMARY_TRIGGER_COUNT = 20; // каждые 20 user/assistant обменов
+
+  async function maybeSummarize() {
+    const session = sessions.value.find((s) => s.id === currentSessionId.value);
+    if (!session) {
+      // eslint-disable-next-line no-console
+      console.log('[maybeSummarize] Пропуск: нет активной сессии');
+      return;
+    }
+    if (!session.summaryEnabled) {
+      // eslint-disable-next-line no-console
+      console.log('[maybeSummarize] Пропуск: summaryEnabled выключен');
+      return;
+    }
+
+    const userAssistantMsgs = messages.value.filter(
+      (m) => m.role === 'user' || m.role === 'assistant',
+    );
+    // Триггерим когда накопилось кратно SUMMARY_TRIGGER_COUNT новых сообщений
+    // (т.е. 20, 40, 60, ...)
+    const nextTrigger = SUMMARY_TRIGGER_COUNT;
+    if (userAssistantMsgs.length % nextTrigger !== 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[maybeSummarize] Пропуск: ${userAssistantMsgs.length} сообщений, ближайший триггер на ${Math.ceil(userAssistantMsgs.length / nextTrigger) * nextTrigger}`);
+      return;
+    }
+
+    const settings = useSettingsStore();
+    await settings.load();
+    if (!settings.apiKey) return;
+
+    isSummarizing.value = true;
+
+    try {
+      const prevSummary = session.summary
+        ? `Предыдущее саммари:\n${session.summary}\n\n---\n`
+        : '';
+
+      // Берём последние N сообщений для обновления саммари
+      const recentBatch = userAssistantMsgs.slice(-SUMMARY_TRIGGER_COUNT);
+      const dialogueText = recentBatch
+        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n\n');
+
+      const summaryModel = settings.summaryModel || settings.model;
+
+      const prompt = `Ты — ассистент, который составляет краткое содержание диалога.
+${prevSummary}Новые сообщения:
+${dialogueText}
+
+Составь обновлённое краткое содержание всего диалога (сохрани ключевую информацию из предыдущего саммари и новых сообщений). Пиши на том же языке, на котором идёт диалог. Будь краток: не более 500 слов.`;
+
+      // eslint-disable-next-line no-console
+      console.log('[maybeSummarize] Генерация саммари, модель:', summaryModel);
+      // eslint-disable-next-line no-console
+      console.log('[maybeSummarize] Payload →', JSON.stringify({
+        endpoint: settings.endpoint,
+        model: summaryModel,
+        promptLength: prompt.length,
+        prevSummaryLength: session.summary?.length ?? 0,
+        recentMessages: recentBatch.length,
+        totalUserAssistant: userAssistantMsgs.length,
+      }, null, 2));
+
+      const newSummary = await chat(
+        {
+          endpoint: settings.endpoint,
+          apiKey: settings.apiKey,
+          model: summaryModel,
+          messages: [{ role: 'user', content: prompt }],
+        },
+      );
+
+      if (newSummary) {
+        session.summary = newSummary.trim();
+        session.updatedAt = Date.now();
+        await putSession({ ...toRaw(session) });
+
+        // eslint-disable-next-line no-console
+        console.log('[maybeSummarize] Саммари обновлено, длина:', newSummary.length);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[maybeSummarize] Ошибка генерации саммари:', err);
+    } finally {
+      isSummarizing.value = false;
+    }
+  }
+
+  async function updateSummaryEnabled(enabled: boolean) {
+    const session = sessions.value.find(
+      (s) => s.id === currentSessionId.value,
+    );
+    if (!session) return;
+    session.summaryEnabled = enabled;
+    session.updatedAt = Date.now();
+    // При отключении очищаем существующее саммари
+    if (!enabled) {
+      session.summary = undefined;
+    }
+    await putSession({ ...toRaw(session) });
+  }
+
   // --- Messaging ---
 
   async function sendMessage(text: string) {
@@ -207,6 +323,7 @@ export const useChatStore = defineStore('chat', () => {
     const llmMessages = buildTrimmedMessages(
       messages.value,
       session?.systemPrompt,
+      session?.summary,
       settings.tokenLimit,
     );
 
@@ -241,6 +358,7 @@ export const useChatStore = defineStore('chat', () => {
             if (idx >= 0) {
               void putMessage({ ...toRaw(messages.value[idx]) });
             }
+            void maybeSummarize();
           },
           onError(err: Error) {
             error.value = err.message;
@@ -306,6 +424,7 @@ export const useChatStore = defineStore('chat', () => {
     const llmMessages = buildTrimmedMessages(
       messages.value,
       session?.systemPrompt,
+      session?.summary,
       settings.tokenLimit,
     );
 
@@ -337,6 +456,7 @@ export const useChatStore = defineStore('chat', () => {
             if (aidx >= 0) {
               void putMessage({ ...toRaw(messages.value[aidx]) });
             }
+            void maybeSummarize();
           },
           onError(err: Error) {
             error.value = err.message;
@@ -372,6 +492,10 @@ export const useChatStore = defineStore('chat', () => {
     // getters
     currentSession,
     displayMessages,
+    // summary
+    isSummarizing,
+    maybeSummarize,
+    updateSummaryEnabled,
     // session actions
     loadSessions,
     createSession,

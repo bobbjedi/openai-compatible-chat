@@ -8,11 +8,24 @@
             </q-card-section>
 
             <q-card-section class="q-px-md q-gutter-sm q-pt-none">
+                <!-- Auto-summary toggle -->
+                <div class="row items-center q-mb-sm">
+                    <div>
+                        <div class="text-subtitle2 text-grey-8">Auto Summary</div>
+                        <div class="text-caption text-grey-6">Сохраняет контекст длинных диалогов через периодическое
+                            саммари</div>
+                    </div>
+                    <q-space />
+                    <q-toggle v-model="localSummaryEnabled" color="primary" />
+                </div>
+
+                <q-separator spaced />
+
                 <!-- System prompt (инструкция) -->
                 <div class="text-subtitle2 text-grey-8 q-mb-xs">System Prompt</div>
                 <q-input v-model="localPrompt" type="textarea" outlined dense autogrow
                     placeholder="Введите инструкцию для модели (например: «Ты — полезный ассистент, отвечай кратко»)."
-                    hint="Передаётся как system-сообщение в начале каждого запроса." :rules="[]" :maxlength="4000"
+                    hint="Передаётся как system-сообщение в начале каждого запроса." :rules="[]" :maxlength="10000"
                     counter />
 
                 <!-- Загрузка из файла -->
@@ -57,12 +70,14 @@ export default defineComponent({
         });
 
         const localPrompt = ref('');
+        const localSummaryEnabled = ref(false);
         const file = ref<File | null>(null);
 
         // При открытии диалога заполняем текущим значением из активной сессии
         watch(visible, (isOpen) => {
             if (isOpen) {
                 localPrompt.value = store.currentSession?.systemPrompt ?? '';
+                localSummaryEnabled.value = store.currentSession?.summaryEnabled ?? false;
                 file.value = null;
             }
         });
@@ -71,7 +86,7 @@ export default defineComponent({
             if (!f) return;
             try {
                 const text = await f.text();
-                localPrompt.value = text.slice(0, 4000);
+                localPrompt.value = text.slice(0, 10000);
                 file.value = f; // сохраняем, чтобы q-file показал имя
             } catch {
                 // Ошибка чтения — игнорируем
@@ -81,12 +96,14 @@ export default defineComponent({
         async function saveAndClose() {
             const prompt = localPrompt.value.trim();
             await store.updateSystemPrompt(prompt || undefined);
+            await store.updateSummaryEnabled(localSummaryEnabled.value);
             emit('update:modelValue', false);
         }
 
         return {
             visible,
             localPrompt,
+            localSummaryEnabled,
             file,
             onFileSelected,
             saveAndClose,

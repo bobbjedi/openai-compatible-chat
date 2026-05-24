@@ -27,8 +27,8 @@ src/
 ├── components/
 │   ├── ChatInput.vue            # Поле ввода сообщения
 │   ├── SessionList.vue          # Список сессий в боковой панели
-│   ├── SettingsDialog.vue       # Диалог глобальных настроек API (в footer sidebar)
-│   └── ChatSettingsDialog.vue   # Диалог настроек конкретного чата (system prompt, открывается из header)
+│   ├── SettingsDialog.vue       # Диалог глобальных настроек API + выбор модели для саммари
+│   └── ChatSettingsDialog.vue   # Диалог настроек чата (system prompt, auto summary toggle)
 ├── css/
 │   ├── app.scss                 # Глобальные стили (светлая + тёмная тема, ~730 строк)
 │   └── quasar.variables.scss    # Переменные Quasar
@@ -43,15 +43,15 @@ src/
 │   ├── db.ts                    # Слой работы с IndexedDB (сессии, сообщения, настройки)
 │   └── llmProvider.ts           # OpenAI-совместимый SSE-стриминговый клиент
 └── stores/
-    ├── chatStore.ts             # Pinia-стор чата (сессии, сообщения, стриминг, edit)
-    └── settingsStore.ts         # Pinia-стор настроек (API-ключ, endpoint, модель, тема в localStorage)
+    ├── chatStore.ts             # Pinia-стор чата (сессии, сообщения, стриминг, edit, rolling summary)
+    └── settingsStore.ts         # Pinia-стор настроек (endpoint, apiKey, model, summaryModel, tokenLimit, darkMode)
 ```
 
 ---
 
 ## 3. Схема IndexedDB
 
-База данных: `deepseek-chat` (версия 1)
+База данных: `deepseek-chat` (версия 2)
 
 ### Object Store: `sessions`
 
@@ -61,7 +61,9 @@ src/
 | `title` | `string` | Название чата |
 | `createdAt` | `number` | Timestamp создания |
 | `updatedAt` | `number` | Timestamp последнего обновления |
-| `systemPrompt` | `string` (опционально) | Системный промпт (инструкция) для чата |
+`systemPrompt` | `string` (опционально) | Системный промпт (инструкция) для чата |
+`summary` | `string` (опционально) | Краткое содержание диалога (rolling summary) |
+`summaryEnabled` | `boolean` (опционально) | Включено ли авто-саммари для чата |
 
 Индекс: `updatedAt`
 
@@ -84,7 +86,7 @@ src/
 | `key` (keyPath) | `string` | Ключ настройки |
 | `value` | `string` | Значение (всегда строка) |
 
-Ключи: `endpoint`, `apiKey`, `model`, `tokenLimit`
+Ключи: `endpoint`, `apiKey`, `model`, `summaryModel`, `tokenLimit`
 
 > **Примечание**: `darkMode` вынесен из IndexedDB в `localStorage` для синхронного доступа (избежание мигания темы при загрузке).
 
@@ -100,6 +102,7 @@ User Input (ChatInput.vue)
     → Создание пустого assistant-сообщения → putMessage() → IndexedDB
     → buildTrimmedMessages() — обрезка контекста по токенам
       → system prompt (если задан) всегда первым сообщением
+      → rolling summary (если есть) вставляется как system-контекст
       → user/assistant сообщения, пока укладываются в лимит токенов
     → Формирование LlmMessage[] (system + user/assistant)
     → console.log полного payload для отладки
@@ -108,6 +111,7 @@ User Input (ChatInput.vue)
       → ReadableStream → построчное чтение → JSON-парсинг чанков
       → onChunk(delta) → обновление content в messages[idx]
       → onDone() → финальный putMessage() в IndexedDB
+      → maybeSummarize() → фоновая генерация/обновление саммари диалога
 ```
 
 ---
@@ -179,7 +183,7 @@ Flex-контейнер для корректного скролла:
 ### [`ChatSettingsDialog.vue`](src/components/ChatSettingsDialog.vue)
 
 Диалог настроек конкретного чата. Открывается по нажатию на иконку шестерёнки в header (фиксированная ширина 440px, плотный режим):
-- **System Prompt** — многострочное поле (`q-input` type `textarea`, autogrow), лимит 4000 символов со счётчиком
+- **System Prompt** — многострочное поле (`q-input` type `textarea`, autogrow), лимит 10000 символов со счётчиком
 - **Загрузка из файла** — `q-file` для выбора `.txt` файла (макс. 1 MB), содержимое читается через `FileReader.readAsText()` и подставляется в поле ввода
 - **Save/Cancel** — сохраняет system prompt в текущую сессию через `chatStore.updateSystemPrompt()` и обновляет запись в IndexedDB (поле `systemPrompt` в объекте сессии)
 - При сохранении system prompt немедленно применяется — при следующей отправке сообщения он будет включён первым в payload
@@ -389,7 +393,69 @@ interface ChatParams { endpoint: string; apiKey: string; model: string; messages
 
 ---
 
-## 10. Решённые проблемы
+## 10. Rolling Summary (авто-саммари диалога)
+
+Для сохранения контекста в длинных диалогах реализован паттерн *rolling summary* — периодическое краткое содержание чата, которое инжектится в контекст LLM.
+
+### Принцип работы
+
+```
+Сообщения 1-20 → первое саммари
+Сообщения 21-40 → обновление саммари (предыдущее + новые 20)
+Сообщения 41-60 → обновление саммари (предыдущее + новые 20)
+...
+```
+
+Саммари хранится в поле [`Session.summary`](src/services/db.ts:9) и вставляется в payload как system-сообщение с префиксом `[Краткое содержание предыдущего диалога]`.
+
+### Триггер
+
+Срабатывает каждые **20** user/assistant сообщений (на 20, 40, 60, 80...). Вызывается в `onDone()` после каждого ответа ассистента. Если `summaryEnabled` выключен — молча пропускается.
+
+### Алгоритм
+
+```typescript
+// chatStore.ts → maybeSummarize()
+1. Проверка summaryEnabled для текущей сессии
+2. Подсчёт user/assistant сообщений
+3. Если кол-во кратно 20 → генерация
+4. Формирование промпта:
+   - предыдущее саммари (если есть) + последние 20 сообщений
+   - инструкция: сохранить ключевую информацию, ≤500 слов
+5. Не-стриминговый вызов chat() с моделью summaryModel (или основной)
+6. Сохранение результата в session.summary → putSession() → IndexedDB
+```
+
+### Интеграция в buildTrimmedMessages()
+
+```typescript
+// После system prompt вставляется:
+if (summary) {
+  result.push({
+    role: 'system',
+    content: `[Краткое содержание предыдущего диалога]\n${summary}`,
+  });
+}
+```
+
+### Настройки
+
+| Где | Что | Пояснение |
+|-----|-----|-----------|
+| [`ChatSettingsDialog`](src/components/ChatSettingsDialog.vue) | Toggle «Auto Summary» | Включает/выключает самари для конкретного чата. При выключении очищает существующее саммари |
+| [`SettingsDialog`](src/components/SettingsDialog.vue) | «Summary Model» | Выбор модели для генерации самари (по умолчанию — основная модель) |
+| [`settingsStore.summaryModel`](src/stores/settingsStore.ts:28) | `deepseek-chat` | Хранится в IndexedDB, ключ `summaryModel` |
+
+### Отладочное логирование
+
+При каждом вызове `maybeSummarize()` в консоль выводится:
+- Причина пропуска (нет сессии / выключен / не кратно 20)
+- Перед генерацией: endpoint, модель, длина промпта, длина предыдущего саммари, количество сообщений
+- После генерации: длина нового саммари
+
+---
+
+## 11. Решённые проблемы
 
 | Проблема | Причина | Решение |
 |----------|---------|---------|
@@ -411,7 +477,7 @@ interface ChatParams { endpoint: string; apiKey: string; model: string; messages
 
 ---
 
-## 11. Конфигурация сборки
+## 12. Конфигурация сборки
 
 ### [`quasar.conf.js`](quasar.conf.js)
 
@@ -430,7 +496,7 @@ interface ChatParams { endpoint: string; apiKey: string; model: string; messages
 
 ---
 
-## 12. Скриншоты и демонстрация
+## 13. Скриншоты и демонстрация
 
 Сборка успешна. Запуск dev-сервера:
 

@@ -6,6 +6,8 @@ export interface Session {
   createdAt: number;
   updatedAt: number;
   systemPrompt?: string;
+  summary?: string;
+  summaryEnabled?: boolean;
 }
 
 export interface Message {
@@ -22,7 +24,7 @@ export interface Settings {
 }
 
 const DB_NAME = 'deepseek-chat';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance: IDBPDatabase | null = null;
 
