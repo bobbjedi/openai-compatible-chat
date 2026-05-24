@@ -70,6 +70,45 @@ body {
   overflow: hidden;
 }
 
+/* ---- Sidebar: footer (Settings + Dark Mode) ---- */
+.chatgpt-sidebar-footer {
+  flex-shrink: 0;
+  border-top: 1px solid #e5e5e5;
+  padding: 4px 0;
+}
+
+body.body--dark .chatgpt-sidebar-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.chatgpt-sidebar-footer .q-item {
+  color: #1f1f1f;
+  min-height: 36px;
+  font-size: 13px;
+  border-radius: 8px;
+  margin: 0 4px;
+}
+
+body.body--dark .chatgpt-sidebar-footer .q-item {
+  color: #ececf1;
+}
+
+.chatgpt-sidebar-footer .q-item:hover {
+  background: #e5e5e5;
+}
+
+body.body--dark .chatgpt-sidebar-footer .q-item:hover {
+  background: #2a2b32;
+}
+
+.chatgpt-sidebar-footer .q-icon {
+  color: #6b6b80;
+}
+
+body.body--dark .chatgpt-sidebar-footer .q-icon {
+  color: #8e8ea0;
+}
+
 /* ---- Sidebar: new chat button ---- */
 .chatgpt-new-btn {
   flex-shrink: 0;

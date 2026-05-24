@@ -6,27 +6,8 @@
         <q-toolbar-title class="text-weight-medium">
           ChatGPT
         </q-toolbar-title>
-        <q-btn flat dense round icon="settings">
-          <q-tooltip>Settings</q-tooltip>
-          <q-menu v-model="menuOpen" anchor="bottom right" self="top right" class="chatgpt-settings-menu">
-            <q-list>
-              <q-item clickable v-ripple @click="openSettingsDialog">
-                <q-item-section avatar>
-                  <q-icon name="tune" />
-                </q-item-section>
-                <q-item-section>API Settings</q-item-section>
-              </q-item>
-              <q-item clickable v-ripple @click="settingsStore.toggleDarkMode()">
-                <q-item-section avatar>
-                  <q-icon :name="settingsStore.darkMode
-                    ? 'dark_mode' : 'light_mode'" />
-                </q-item-section>
-                <q-item-section>
-                  {{ settingsStore.darkMode ? 'Light Mode' : 'Dark Mode' }}
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-menu>
+        <q-btn flat dense round icon="settings" @click="showChatSettings = true">
+          <q-tooltip>Chat Settings</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-header>
@@ -40,29 +21,21 @@
       <router-view />
     </q-page-container>
 
-    <SettingsDialog v-model="showSettings" />
+    <ChatSettingsDialog v-model="showChatSettings" />
   </q-layout>
 </template>
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue';
 import SessionList from 'src/components/SessionList.vue';
-import SettingsDialog from 'src/components/SettingsDialog.vue';
-import { useSettingsStore } from 'src/stores/settingsStore';
+import ChatSettingsDialog from 'src/components/ChatSettingsDialog.vue';
 
 export default defineComponent({
   name: 'MainLayout',
-  components: { SessionList, SettingsDialog },
+  components: { SessionList, ChatSettingsDialog },
   setup() {
     const leftDrawerOpen = ref(true);
-    const menuOpen = ref(false);
-    const showSettings = ref(false);
-    const settingsStore = useSettingsStore();
-
-    function openSettingsDialog() {
-      menuOpen.value = false;
-      showSettings.value = true;
-    }
+    const showChatSettings = ref(false);
 
     function onSessionSelected() {
       leftDrawerOpen.value = false;
@@ -70,10 +43,7 @@ export default defineComponent({
 
     return {
       leftDrawerOpen,
-      menuOpen,
-      showSettings,
-      settingsStore,
-      openSettingsDialog,
+      showChatSettings,
       onSessionSelected,
     };
   },

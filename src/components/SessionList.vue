@@ -47,6 +47,27 @@
             </div>
         </q-scroll-area>
 
+        <!-- Bottom bar: Settings + Dark Mode -->
+        <div class="chatgpt-sidebar-footer">
+            <q-list dense>
+                <q-item clickable v-ripple @click="showSettings = true">
+                    <q-item-section avatar>
+                        <q-icon name="tune" size="xs" />
+                    </q-item-section>
+                    <q-item-section>Settings</q-item-section>
+                </q-item>
+                <q-item clickable v-ripple @click="settingsStore.toggleDarkMode()">
+                    <q-item-section avatar>
+                        <q-icon :name="settingsStore.darkMode
+                            ? 'dark_mode' : 'light_mode'" size="xs" />
+                    </q-item-section>
+                    <q-item-section>
+                        {{ settingsStore.darkMode ? 'Light Mode' : 'Dark Mode' }}
+                    </q-item-section>
+                </q-item>
+            </q-list>
+        </div>
+
         <!-- Rename dialog -->
         <q-dialog v-model="renameDialog" persistent>
             <q-card class="chatgpt-dialog" style="min-width: 300px">
@@ -65,21 +86,29 @@
                 </q-card-actions>
             </q-card>
         </q-dialog>
+
+        <!-- Settings dialog -->
+        <SettingsDialog v-model="showSettings" />
     </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue';
 import { useChatStore, type Session } from 'src/stores/chatStore';
+import { useSettingsStore } from 'src/stores/settingsStore';
+import SettingsDialog from 'src/components/SettingsDialog.vue';
 
 export default defineComponent({
     name: 'SessionList',
+    components: { SettingsDialog },
     emits: ['session-selected'],
     setup(_props, { emit }) {
         const store = useChatStore();
+        const settingsStore = useSettingsStore();
         const renameDialog = ref(false);
         const renameId = ref<string | null>(null);
         const renameTitle = ref('');
+        const showSettings = ref(false);
 
         function startRename(s: Session) {
             renameId.value = s.id;
@@ -109,8 +138,10 @@ export default defineComponent({
 
         return {
             store,
+            settingsStore,
             renameDialog,
             renameTitle,
+            showSettings,
             startRename,
             confirmRename,
             selectChat,

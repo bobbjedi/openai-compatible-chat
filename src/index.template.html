@@ -16,6 +16,16 @@
     <link rel="icon" type="image/ico" href="favicon.ico">
   </head>
   <body>
+    <script>
+      // Применяем сохранённую тему ДО рендеринга приложения
+      (function() {
+        try {
+          if (localStorage.getItem('chatgpt-dark-mode') === 'true') {
+            document.body.classList.add('body--dark');
+          }
+        } catch(e) {}
+      })();
+    </script>
     <!-- DO NOT touch the following DIV -->
     <div id="q-app"></div>
   </body>
