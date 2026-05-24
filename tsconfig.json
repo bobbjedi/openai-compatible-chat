@@ -1,0 +1,8 @@
+{
+  "extends": "@quasar/app/tsconfig-preset",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "target": "es2021",
+    "lib": ["es2021", "dom"]
+  }
+}
