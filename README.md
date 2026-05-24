@@ -6,6 +6,7 @@
 [![Vue](https://img.shields.io/badge/Vue-3.x-4FC08D?logo=vue.js)](https://vuejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-4.5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Pinia](https://img.shields.io/badge/Pinia-2-yellow?logo=pinia)](https://pinia.vuejs.org/)
+[![GitHub Pages](https://img.shields.io/badge/demo-online-10a37f?logo=github)](https://bobbjedi.github.io/openai-compatible-chat/)
 
 ---
 
@@ -56,6 +57,10 @@ npx quasar dev
 ```
 
 App opens at `http://localhost:8080`.
+
+### Live Demo
+
+**[bobbjedi.github.io/openai-compatible-chat](https://bobbjedi.github.io/openai-compatible-chat/)** — deployed via GitHub Pages + GitHub Actions (PWA, HTTPS).
 
 ---
 
