@@ -106,7 +106,8 @@
                         <!-- File attachments chips in user messages -->
                         <div v-if="msg.attachments && msg.attachments.length > 0" class="chatgpt-attachments-row">
                             <div v-for="att in msg.attachments" :key="att.name" class="chatgpt-attachment-chip">
-                                <q-icon name="description" size="xs" class="q-mr-xs" />
+                                <q-icon v-if="att.type.startsWith('image')" name="image" size="xs" class="q-mr-xs" />
+                                <q-icon v-else name="description" size="xs" class="q-mr-xs" />
                                 <span class="text-weight-medium">{{ att.name }}</span>
                                 <span class="text-grey-6 q-ml-xs text-caption">
                                     ({{ attSize(att.size) }}) </span>

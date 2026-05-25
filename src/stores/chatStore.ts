@@ -454,7 +454,9 @@ ${dialogueText}`;
     sessionId: string,
     initialMessages: LlmMessage[],
     assistantIdx: number,
+    streamModel?: string,
   ): Promise<void> {
+    const model = streamModel || settings.model;
     let round = 0;
 
     /* eslint-disable no-await-in-loop, no-loop-func */
@@ -467,7 +469,7 @@ ${dialogueText}`;
           {
             endpoint: settings.endpoint,
             apiKey: settings.apiKey,
-            model: settings.model,
+            model,
             messages: initialMessages,
           },
           {
@@ -635,17 +637,25 @@ ${dialogueText}`;
 
     // Build attachments meta and the content block for LLM
     const attachmentMetas: AttachmentMeta[] = [];
+    const imageDataUrls: string[] = [];
     let filesContentText = '';
 
     if (parsedFiles && parsedFiles.length > 0) {
       parsedFiles.forEach((f) => {
-        attachmentMetas.push({ name: f.name, type: 'text/plain', size: f.size });
-        filesContentText += `[Attached file: ${f.name}]\n${f.text}\n\n`;
+        if (f.dataUrl) {
+          attachmentMetas.push({ name: f.name, type: 'image/png', size: f.size });
+          imageDataUrls.push(f.dataUrl);
+        } else {
+          attachmentMetas.push({ name: f.name, type: 'text/plain', size: f.size });
+          filesContentText += `[Attached file: ${f.name}]\n${f.text}\n\n`;
+        }
       });
       if (filesContentText) {
         filesContentText += '---\n';
       }
     }
+
+    const hasImages = imageDataUrls.length > 0;
 
     // 1. Add user message (only metadata saved, not file content)
     const userMsg: Message = {
@@ -713,7 +723,36 @@ ${dialogueText}`;
       const lastUser = llmMessages.filter((m) => m.role === 'user').pop();
       if (lastUser) {
         // eslint-disable-next-line no-param-reassign
-        lastUser.content = filesContentText + lastUser.content;
+        lastUser.content = filesContentText + (lastUser.content as string);
+      }
+    }
+
+    // If images are attached and vision enabled, convert last user message to vision format
+    const streamModel = hasImages && settings.visionEnabled
+      ? (settings.visionModel || settings.model)
+      : settings.model;
+
+    if (hasImages && settings.visionEnabled) {
+      const lastUser = llmMessages.filter((m) => m.role === 'user').pop();
+      if (lastUser) {
+        const textContent = typeof lastUser.content === 'string'
+          ? lastUser.content
+          : '';
+        /* eslint-disable camelcase */
+        const contentParts: Array<
+          { type: 'text'; text: string }
+          | { type: 'image_url'; image_url: { url: string } }
+        > = [
+          ...imageDataUrls.map((url) => ({
+            type: 'image_url' as const,
+            image_url: { url },
+          })),
+        ];
+        /* eslint-enable camelcase */
+        if (textContent) {
+          contentParts.push({ type: 'text' as const, text: textContent });
+        }
+        lastUser.content = contentParts;
       }
     }
 
@@ -722,12 +761,12 @@ ${dialogueText}`;
     // eslint-disable-next-line no-console
     console.log('[sendMessage] Payload →', JSON.stringify({
       endpoint: settings.endpoint,
-      model: settings.model,
+      model: streamModel,
       messages: llmMessages,
     }, null, 2));
 
-    // 4. Stream with tool loop
-    await streamWithToolLoop(settings, sid, llmMessages, idx);
+    // 4. Stream with tool loop — pass matched model
+    await streamWithToolLoop(settings, sid, llmMessages, idx, streamModel);
   }
 
   function cancelStream() {

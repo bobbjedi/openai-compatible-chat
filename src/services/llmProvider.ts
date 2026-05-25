@@ -1,6 +1,15 @@
+/* eslint-disable camelcase */
+
+export type LlmContent =
+  | string
+  | Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  >;
+
 export interface LlmMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: LlmContent;
 }
 
 export interface StreamCallbacks {

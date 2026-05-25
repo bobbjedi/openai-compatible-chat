@@ -49,6 +49,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const userFacts = ref<string[]>([]);
   const searchApiKey = ref('');
   const searchEnabled = ref(false);
+  const visionEnabled = ref(false);
+  const visionModel = ref('deepseek-chat');
   const darkMode = ref(loadDarkMode());
 
   // Apply theme immediately on store init
@@ -58,7 +60,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function load() {
     if (loaded) return;
-    const [ep, key, mdl, smdl, tkl, facts, srchKey, srchEnb] = await Promise.all([
+    const [ep, key, mdl, smdl, tkl, facts, srchKey, srchEnb, vEnb, vMdl] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
       getSetting('model'),
@@ -67,6 +69,8 @@ export const useSettingsStore = defineStore('settings', () => {
       getSetting('userFacts'),
       getSetting('searchApiKey'),
       getSetting('searchEnabled'),
+      getSetting('visionEnabled'),
+      getSetting('visionModel'),
     ]);
     if (ep) endpoint.value = ep;
     if (key) apiKey.value = key;
@@ -75,6 +79,8 @@ export const useSettingsStore = defineStore('settings', () => {
     if (tkl) tokenLimit.value = parseInt(tkl, 10) || 200000;
     if (srchKey) searchApiKey.value = srchKey;
     if (srchEnb) searchEnabled.value = srchEnb === 'true';
+    if (vEnb) visionEnabled.value = vEnb === 'true';
+    if (vMdl) visionModel.value = vMdl;
     userFacts.value = deserializeFacts(facts);
     loaded = true;
   }
@@ -134,6 +140,16 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('searchEnabled', String(val));
   }
 
+  async function saveVisionEnabled(val: boolean) {
+    visionEnabled.value = val;
+    await putSetting('visionEnabled', String(val));
+  }
+
+  async function saveVisionModel(val: string) {
+    visionModel.value = val;
+    await putSetting('visionModel', val);
+  }
+
   function toggleDarkMode() {
     darkMode.value = !darkMode.value;
     Dark.set(darkMode.value);
@@ -149,6 +165,8 @@ export const useSettingsStore = defineStore('settings', () => {
     userFacts,
     searchApiKey,
     searchEnabled,
+    visionEnabled,
+    visionModel,
     darkMode,
     load,
     saveEndpoint,
@@ -159,6 +177,8 @@ export const useSettingsStore = defineStore('settings', () => {
     saveUserFacts,
     saveSearchApiKey,
     saveSearchEnabled,
+    saveVisionEnabled,
+    saveVisionModel,
     addFact,
     removeFact,
     toggleDarkMode,

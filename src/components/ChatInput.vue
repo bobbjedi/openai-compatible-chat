@@ -4,7 +4,13 @@
         <div v-if="pendingFiles.length > 0" class="chatgpt-file-chips">
             <q-chip v-for="(f, i) in pendingFiles" :key="i" dense removable color="grey-3" text-color="black"
                 class="chatgpt-file-chip" @remove="removeFile(i)">
-                <q-icon name="description" size="xs" class="q-mr-xs" />
+                <template v-if="isImageFile(f)">
+                    <q-icon name="image" size="xs" class="q-mr-xs" />
+                    <img :src="pendingPreviews[i]" class="chatgpt-file-preview-thumb" />
+                </template>
+                <template v-else>
+                    <q-icon name="description" size="xs" class="q-mr-xs" />
+                </template>
                 {{ f.name }}
                 <span class="chatgpt-file-size text-caption text-grey-6 q-ml-xs">
                     ({{ formatSize(f.size) }})
@@ -67,6 +73,12 @@ export default defineComponent({
         const isListening = ref(false);
         const recognitionSupported = ref(!!SpeechRecognitionAPI);
 
+        const pendingPreviews = ref<string[]>([]);
+
+        function isImageFile(f: File): boolean {
+            return f.type.startsWith('image/');
+        }
+
         function formatSize(bytes: number): string {
             if (bytes < 1024) return `${bytes} B`;
             if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -80,13 +92,24 @@ export default defineComponent({
         function onFilesSelected(e: Event) {
             const input = e.target as HTMLInputElement;
             if (input.files) {
-                pendingFiles.value.push(...Array.from(input.files));
+                const newFiles = Array.from(input.files);
+                newFiles.forEach((f) => {
+                    if (isImageFile(f)) {
+                        pendingPreviews.value.push(URL.createObjectURL(f));
+                    } else {
+                        pendingPreviews.value.push('');
+                    }
+                });
+                pendingFiles.value.push(...newFiles);
             }
-            // Reset so the same file can be selected again
             input.value = '';
         }
 
         function removeFile(index: number) {
+            if (pendingPreviews.value[index]) {
+                URL.revokeObjectURL(pendingPreviews.value[index]);
+            }
+            pendingPreviews.value.splice(index, 1);
             pendingFiles.value.splice(index, 1);
         }
 
@@ -178,11 +201,13 @@ export default defineComponent({
             recognitionSupported,
             toggleListening,
             pendingFiles,
+            pendingPreviews,
             fileInputRef,
             openFilePicker,
             onFilesSelected,
             removeFile,
             formatSize,
+            isImageFile,
         };
     },
 });

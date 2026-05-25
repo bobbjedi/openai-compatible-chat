@@ -49,6 +49,21 @@
 
         <q-separator spaced />
 
+        <div class="text-subtitle2 text-grey-8 q-mb-sm">Image Support (Vision)</div>
+        <q-toggle v-model="localVisionEnabled" dense label="Enable image attachments"
+          hint="Attach images (PNG/JPEG) to messages — model will see them" />
+        <q-select v-model="localVisionModel" outlined dense label="Vision model" :options="modelOptions" use-input
+          input-debounce="0" behavior="dialog" hint="Model for image recognition (uses main model if not set)"
+          :disable="!localVisionEnabled" @filter="filterModels" clearable>
+          <template #no-option>
+            <q-item>
+              <q-item-section class="text-grey">No matching models</q-item-section>
+            </q-item>
+          </template>
+        </q-select>
+
+        <q-separator spaced />
+
         <div class="text-subtitle2 text-grey-8 q-mb-sm">Web Search (Tavily)</div>
         <q-toggle v-model="localSearchEnabled" dense label="Enable web search"
           hint="Model can search the internet when needed" />
@@ -98,6 +113,8 @@ export default defineComponent({
     const localTokenLimit = ref(store.tokenLimit);
     const localSearchApiKey = ref(store.searchApiKey);
     const localSearchEnabled = ref(store.searchEnabled);
+    const localVisionEnabled = ref(store.visionEnabled);
+    const localVisionModel = ref(store.visionModel);
     const showKey = ref(false);
     const showSearchKey = ref(false);
     const modelOptions = ref([...KNOWN_MODELS]);
@@ -117,6 +134,8 @@ export default defineComponent({
         localTokenLimit.value = store.tokenLimit;
         localSearchApiKey.value = store.searchApiKey;
         localSearchEnabled.value = store.searchEnabled;
+        localVisionEnabled.value = store.visionEnabled;
+        localVisionModel.value = store.visionModel;
       }
     });
 
@@ -149,6 +168,8 @@ export default defineComponent({
         store.saveTokenLimit(localTokenLimit.value || 200000),
         store.saveSearchApiKey(localSearchApiKey.value.trim()),
         store.saveSearchEnabled(localSearchEnabled.value),
+        store.saveVisionEnabled(localVisionEnabled.value),
+        store.saveVisionModel(localVisionModel.value.trim()),
       ]);
       emit('update:modelValue', false);
     }
@@ -161,6 +182,8 @@ export default defineComponent({
       localTokenLimit,
       localSearchApiKey,
       localSearchEnabled,
+      localVisionEnabled,
+      localVisionModel,
       showKey,
       showSearchKey,
       modelOptions,

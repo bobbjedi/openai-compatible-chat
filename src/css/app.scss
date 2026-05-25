@@ -807,6 +807,14 @@ body.body--dark .chatgpt-search-meta .q-icon {
   color: #1f1f1f;
 }
 
+.chatgpt-file-preview-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  object-fit: cover;
+  margin-right: 4px;
+}
+
 body.body--dark .chatgpt-attachment-chip {
   background: #2a2b32;
   color: #ececf1;
