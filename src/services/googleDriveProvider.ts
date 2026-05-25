@@ -52,6 +52,7 @@ export interface DriveSessionData {
 
 export interface DriveMessageData {
   id?: number;
+  uuid: string;
   sessionId: string;
   role: 'user' | 'assistant' | 'system' | 'searchResult';
   content: string;

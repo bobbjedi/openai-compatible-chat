@@ -574,6 +574,7 @@ ${dialogueText}`;
         // Add search result as a searchResult message.
         // Hidden from UI, mapped to 'user' role in buildTrimmedMessages for the LLM API.
         const searchResultMsg: Message = {
+          uuid: crypto.randomUUID(),
           sessionId,
           role: 'searchResult',
           content: `[Search results for "${tool.query}"]:\n${formatted}`,
@@ -585,6 +586,7 @@ ${dialogueText}`;
 
         // Add new assistant message for the final response (carries searchMeta)
         const newMsg: Message = {
+          uuid: crypto.randomUUID(),
           sessionId,
           role: 'assistant',
           content: '',
@@ -676,6 +678,7 @@ ${dialogueText}`;
 
     // 1. Add user message (only metadata saved, not file content)
     const userMsg: Message = {
+      uuid: crypto.randomUUID(),
       sessionId: sid,
       role: 'user',
       content: text,
@@ -700,6 +703,7 @@ ${dialogueText}`;
 
     // 2. Create empty assistant message
     const assistantMsg: Message = {
+      uuid: crypto.randomUUID(),
       sessionId: sid,
       role: 'assistant',
       content: '',
@@ -824,6 +828,7 @@ ${dialogueText}`;
     error.value = null;
 
     const assistantMsg: Message = {
+      uuid: crypto.randomUUID(),
       sessionId: sid,
       role: 'assistant',
       content: '',

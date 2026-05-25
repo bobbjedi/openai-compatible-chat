@@ -161,9 +161,27 @@ export default defineComponent({
             confirmPull.value = false;
             try {
                 await syncService.pullAll(
-                    () => { /* sessions will be reloaded by chatStore */ },
-                    () => { /* messages will be reloaded by chatStore */ },
-                    () => { /* facts will be reloaded by settingsStore */ },
+                    () => chatStore.sessions,
+                    (sessionId: string) => {
+                        if (sessionId === chatStore.currentSessionId) {
+                            return chatStore.messages;
+                        }
+                        return [];
+                    },
+                    (sessions) => {
+                        // Reload sessions in chatStore
+                        chatStore.sessions.splice(0, chatStore.sessions.length, ...sessions);
+                    },
+                    (sessionId, messages) => {
+                        // Store messages for the session
+                        // For now, if it's the current session, update messages
+                        if (sessionId === chatStore.currentSessionId) {
+                            chatStore.messages.splice(0, chatStore.messages.length, ...messages);
+                        }
+                    },
+                    (facts) => {
+                        settingsStore.saveUserFacts(facts);
+                    },
                 );
             } catch (err) {
                 // Error is already set in syncState

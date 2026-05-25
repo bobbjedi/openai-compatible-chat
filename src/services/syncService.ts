@@ -52,6 +52,7 @@ async function flushSync(
         if (messages.length > 0) {
           const driveMessages: DriveMessageData[] = messages.map((m) => ({
             id: m.id,
+            uuid: m.uuid,
             sessionId: m.sessionId,
             role: m.role,
             content: m.content,
@@ -157,6 +158,8 @@ export const syncService = {
    * Перезаписывает локальные данные.
    */
   async pullAll(
+    getLocalSessions: () => Session[],
+    getLocalMessages: (sid: string) => Message[],
     setSessions: (s: Session[]) => void,
     setMessages: (sid: string, msgs: Message[]) => void,
     setUserFacts: (f: string[]) => void,
@@ -169,33 +172,54 @@ export const syncService = {
     syncState.syncError.value = null;
 
     try {
-      // Read sessions list
+      // Read sessions list from Drive
       const driveSessions = await googleDriveProvider.readSessions();
       if (!driveSessions) {
         throw new Error('No backup found in Google Drive');
       }
 
-      const sessions: Session[] = driveSessions.map((ds) => ({
-        id: ds.id,
-        title: ds.title,
-        createdAt: ds.createdAt,
-        updatedAt: ds.updatedAt,
-        systemPrompt: ds.systemPrompt,
-        summary: ds.summary,
-        summaryEnabled: ds.summaryEnabled,
-      }));
+      // Get local sessions
+      const localSessions = getLocalSessions();
 
-      // Read messages for each session in parallel
+      // Merge sessions: Drive wins if updatedAt is newer
+      const mergedSessionsMap = new Map<string, Session>();
+
+      // First, add all local sessions
+      localSessions.forEach((s) => {
+        mergedSessionsMap.set(s.id, { ...s });
+      });
+
+      // Then merge/override with Drive sessions (newer updatedAt wins)
+      driveSessions.forEach((ds) => {
+        const existing = mergedSessionsMap.get(ds.id);
+        if (!existing || ds.updatedAt > existing.updatedAt) {
+          mergedSessionsMap.set(ds.id, {
+            id: ds.id,
+            title: ds.title,
+            createdAt: ds.createdAt,
+            updatedAt: ds.updatedAt,
+            systemPrompt: ds.systemPrompt,
+            summary: ds.summary,
+            summaryEnabled: ds.summaryEnabled,
+          });
+        }
+      });
+
+      const mergedSessions = Array.from(mergedSessionsMap.values())
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+
+      // Read messages for each merged session from Drive
       const messagesResults = await Promise.all(
-        sessions.map(async (session) => {
+        mergedSessions.map(async (session) => {
           const driveMessages = await googleDriveProvider
             .readSessionMessages(session.id);
           if (!driveMessages) {
             return { sessionId: session.id, messages: [] as Message[] };
           }
 
-          const msgs: Message[] = driveMessages.map((dm) => ({
+          const driveMsgs: Message[] = driveMessages.map((dm) => ({
             id: dm.id,
+            uuid: dm.uuid || crypto.randomUUID(),
             sessionId: dm.sessionId,
             role: dm.role,
             content: dm.content,
@@ -204,11 +228,32 @@ export const syncService = {
             attachments: dm.attachments,
             createdAt: dm.createdAt,
           }));
-          return { sessionId: session.id, messages: msgs };
+
+          // Get local messages for this session
+          const localMsgs = getLocalMessages(session.id);
+
+          // Merge messages by uuid (newer createdAt wins)
+          const mergedMsgsMap = new Map<string, Message>();
+
+          localMsgs.forEach((m) => {
+            mergedMsgsMap.set(m.uuid, { ...m });
+          });
+
+          driveMsgs.forEach((dm) => {
+            const existing = mergedMsgsMap.get(dm.uuid);
+            if (!existing || dm.createdAt > existing.createdAt) {
+              mergedMsgsMap.set(dm.uuid, dm);
+            }
+          });
+
+          const mergedMsgs = Array.from(mergedMsgsMap.values())
+            .sort((a, b) => a.createdAt - b.createdAt);
+
+          return { sessionId: session.id, messages: mergedMsgs };
         }),
       );
 
-      // Apply messages to store
+      // Apply merged messages to store
       messagesResults.forEach(({ sessionId, messages }) => {
         setMessages(sessionId, messages);
       });
@@ -219,8 +264,8 @@ export const syncService = {
         setUserFacts(driveFacts.facts);
       }
 
-      // Apply sessions last (after messages are set)
-      setSessions(sessions);
+      // Apply merged sessions
+      setSessions(mergedSessions);
 
       const totalMessages = messagesResults.reduce(
         (acc, r) => acc + r.messages.length,
@@ -229,7 +274,10 @@ export const syncService = {
 
       syncState.lastSyncAt.value = Date.now();
 
-      return { sessionsCount: sessions.length, messagesCount: totalMessages };
+      return {
+        sessionsCount: mergedSessions.length,
+        messagesCount: totalMessages,
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Pull failed';
       syncState.syncError.value = msg;

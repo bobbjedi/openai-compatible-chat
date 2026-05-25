@@ -18,6 +18,7 @@ export interface AttachmentMeta {
 
 export interface Message {
   id?: number;
+  uuid: string; // Уникальный ID для кросс-устройственной синхронизации
   sessionId: string;
   role: 'user' | 'assistant' | 'system' | 'searchResult';
   content: string;
