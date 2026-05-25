@@ -45,7 +45,7 @@
                 </template>
             </q-input>
             <p class="chatgpt-disclaimer text-caption text-grey-6">
-                ChatGPT can make mistakes. Check important info.
+                LLMChat can make mistakes. Check important info.
             </p>
         </div>
     </div>

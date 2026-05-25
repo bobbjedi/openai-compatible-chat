@@ -154,13 +154,19 @@ module.exports = configure((ctx) => ({
 
     manifest: {
       name: 'OpenAI-Compatible Chat',
-      short_name: 'ChatGPT',
+      short_name: 'LLM Chat',
       description: 'ChatGPT-like SPA for any OpenAI-compatible API',
       display: 'standalone',
       orientation: 'portrait',
       background_color: '#ffffff',
       theme_color: '#10a37f',
       icons: [
+        {
+          src: 'favicon.svg',
+          sizes: 'any',
+          type: 'image/svg+xml',
+          purpose: 'any maskable',
+        },
         {
           src: 'icons/icon-128x128.png',
           sizes: '128x128',
