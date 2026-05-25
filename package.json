@@ -1,6 +1,6 @@
 {
   "name": "chat",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "ChatGPT-like SPA for any OpenAI-compatible API. Voice input, rolling summaries, user facts.",
   "productName": "OpenAI-Compatible Chat",
   "author": "bobbjedi <bobbrownjedi@gmail.com>",

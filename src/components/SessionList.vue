@@ -18,8 +18,8 @@
                         <q-icon name="chat_bubble_outline" size="xs" />
                     </q-item-section>
                     <q-item-section>
-                        <q-item-label lines="1" class="chatgpt-session-title">
-                            {{ s.title }}
+                        <q-item-label class="chatgpt-session-title">
+                            {{ truncate(s.title, 24) }}
                         </q-item-label>
                     </q-item-section>
                     <q-item-section side>
@@ -117,6 +117,11 @@ export default defineComponent({
 
         const appVersion: string = pkg.version;
 
+        function truncate(str: string, maxLen: number): string {
+            if (str.length <= maxLen) return str;
+            return `${str.slice(0, maxLen - 1)}…`;
+        }
+
         function startRename(s: Session) {
             renameId.value = s.id;
             renameTitle.value = s.title;
@@ -150,6 +155,7 @@ export default defineComponent({
             renameTitle,
             showSettings,
             appVersion,
+            truncate,
             startRename,
             confirmRename,
             selectChat,
