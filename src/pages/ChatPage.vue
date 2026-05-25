@@ -95,6 +95,14 @@
                         <div class="chatgpt-msg-author">
                             {{ msg.role === 'assistant' ? 'LLM' : 'You' }}
                         </div>
+                        <!-- Search result meta banner (attached to assistant response) -->
+                        <div v-if="msg.searchMeta && msg.role === 'assistant'" class="chatgpt-search-meta">
+                            <q-icon name="public" size="xs" class="q-mr-xs" />
+                            <span class="text-weight-medium">{{ msg.searchMeta.query }}</span>
+                            <span class="text-grey-6 q-ml-sm">
+                                {{ msg.searchMeta.resultsCount }} result(s)
+                            </span>
+                        </div>
                         <!-- Edit mode for user messages -->
                         <div v-if="editingId === msg.id" class="chatgpt-edit-area">
                             <q-input v-model="editText" outlined dense autogrow type="textarea"

@@ -72,10 +72,13 @@ export const useChatStore = defineStore('chat', () => {
       tokenBudget += estimateTokens(summary) + 16;
     }
 
-    // Collect user/assistant from the end, until we exceed the limit
+    // Collect user/assistant/searchResult from the end, until we exceed the limit.
+    // searchResult messages are mapped to 'user' role for the LLM API.
     const eligible: { role: 'user' | 'assistant'; content: string }[] = [];
     messagesArr.forEach((m) => {
-      if (m.role === 'user' || (m.role === 'assistant' && m.content !== '')) {
+      if (m.role === 'searchResult') {
+        eligible.push({ role: 'user', content: m.content });
+      } else if (m.role === 'user' || (m.role === 'assistant' && m.content !== '')) {
         eligible.push({ role: m.role, content: m.content });
       }
     });
@@ -106,14 +109,65 @@ export const useChatStore = defineStore('chat', () => {
     ) ?? null,
   );
 
+  /**
+   * Detect a tool call JSON in the response text.
+   * Returns { query } if a search tool call is found, null otherwise.
+   */
+  function detectToolCall(text: string): { query: string } | null {
+    // Only match when the ENTIRE response is a JSON tool call, not mixed with text.
+    // Trim and verify it starts with { and ends with }.
+    const trimmed = text.trim();
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+      return null;
+    }
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (
+        typeof parsed === 'object'
+        && parsed !== null
+        && 'search' in parsed
+        && typeof (parsed as Record<string, unknown>).search === 'string'
+        && ((parsed as Record<string, string>).search).length > 0
+      ) {
+        return { query: (parsed as Record<string, string>).search };
+      }
+    } catch {
+      // Not valid JSON — ignore
+    }
+    return null;
+  }
+
+  /**
+   * Build system prompt extension with search tool instruction.
+   */
+  function searchSystemPrompt(): string {
+    return `[WEB SEARCH TOOL — MANDATORY RULES]
+
+You have access to a web search tool. When you need up-to-date information, respond with ONLY a JSON object (no other text):
+{"search":"your search query here"}
+
+CRITICAL RULES:
+1. Your response MUST be ONLY valid JSON — not a single character before or after the braces.
+2. MANDATORY search triggers (you MUST search, no exceptions):
+   - Keywords: «новости», «news», «сейчас», «now», «сегодня», «today», «последние», «latest», «текущий год», «2025», «2026»
+   - Any question about the current date, weather, stock prices, sports scores, recent events
+   - ANY question requiring real-world facts you cannot know from training data
+3. FORBIDDEN:
+   - NEVER invent weather, news, prices, dates, or any real-time data
+   - NEVER guess «tomorrow's weather» or «today's news» — search instead
+   - If unsure whether data is current → search
+
+After you respond with the JSON, you will receive search results. Then give the user a complete answer based on those results.`;
+  }
+
   const displayMessages = computed(() => messages.value.filter((m) => {
-    if (m.role === 'system') return false;
-    // Hide empty assistant messages — tool calls produce empty content
+    if (m.role === 'system' || m.role === 'searchResult') return false;
+    // Hide empty assistant messages
     if (m.role === 'assistant' && !m.content && !m.reasoning) {
       return false;
     }
-    // Hide search result injections (shown to LLM, not to user)
-    if (m.role === 'user' && m.content.startsWith('[Search results for')) {
+    // Hide assistant tool-call JSON (both partial during stream and complete)
+    if (m.role === 'assistant' && m.content.trimStart().startsWith('{')) {
       return false;
     }
     return true;
@@ -382,30 +436,6 @@ ${dialogueText}`;
 
   const MAX_TOOL_ROUNDS = 3;
 
-  /**
-   * Detect a tool call JSON in the response text.
-   * Returns { query } if a search tool call is found, null otherwise.
-   */
-  function detectToolCall(text: string): { query: string } | null {
-    // Match {"search":"<query>"} anywhere in the text
-    // (LLM may add text before/after the JSON)
-    const match = /\{\s*"search"\s*:\s*"([^"]+)"\s*\}/.exec(text);
-    if (match) {
-      return { query: match[1] };
-    }
-    return null;
-  }
-
-  /**
-   * Build system prompt extension with search tool instruction.
-   */
-  function searchSystemPrompt(): string {
-    return `[WEB SEARCH TOOL]
-If you need information from the internet to answer the user's question, respond EXACTLY with:
-{"search":"your search query"}
-Do NOT add any other text before or after the JSON. After you do this, you will receive search results and can then formulate your final answer. Only use this when the answer genuinely requires up-to-date or external information.`;
-  }
-
   async function streamWithToolLoop(
     settings: ReturnType<typeof useSettingsStore>,
     sessionId: string,
@@ -501,14 +531,19 @@ Do NOT add any other text before or after the JSON. After you do this, you will 
         // eslint-disable-next-line no-console
         console.log('[tool] Search results:', results.results.length, 'items');
 
-        // Replace tool call JSON with search result in message history (not shown to user)
-        messages.value[assistantIdx].content = '';
+        // Completely remove the tool-call assistant message (not shown to user).
+        // Its JSON and reasoning are only for tool detection, not UI.
+        if (messages.value[assistantIdx].id) {
+          // eslint-disable-next-line no-await-in-loop
+          await deleteMessage(messages.value[assistantIdx].id!);
+        }
+        messages.value.splice(assistantIdx, 1);
 
-        // Add search result as a user message so buildTrimmedMessages picks it up
-        // (buildTrimmedMessages only collects user/assistant roles)
+        // Add search result as a searchResult message.
+        // Hidden from UI, mapped to 'user' role in buildTrimmedMessages for the LLM API.
         const searchResultMsg: Message = {
           sessionId,
-          role: 'user',
+          role: 'searchResult',
           content: `[Search results for "${tool.query}"]:\n${formatted}`,
           createdAt: Date.now(),
         };
@@ -516,11 +551,15 @@ Do NOT add any other text before or after the JSON. After you do this, you will 
         await putMessage(searchResultMsg);
         messages.value.push(searchResultMsg);
 
-        // Add new assistant message for the final response
+        // Add new assistant message for the final response (carries searchMeta)
         const newMsg: Message = {
           sessionId,
           role: 'assistant',
           content: '',
+          searchMeta: {
+            query: tool.query,
+            resultsCount: results.results.length,
+          },
           createdAt: Date.now(),
         };
         // eslint-disable-next-line no-await-in-loop

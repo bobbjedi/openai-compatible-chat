@@ -731,6 +731,33 @@ body.body--dark .chatgpt-messages::-webkit-scrollbar-thumb {
   background: #555;
 }
 
+/* ---- Search result meta banner ---- */
+.chatgpt-search-meta {
+  display: flex;
+  align-items: center;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #166534;
+}
+
+.chatgpt-search-meta .q-icon {
+  color: #16a34a;
+}
+
+body.body--dark .chatgpt-search-meta {
+  background: #052e16;
+  border-color: #166534;
+  color: #bbf7d0;
+}
+
+body.body--dark .chatgpt-search-meta .q-icon {
+  color: #22c55e;
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
   .chatgpt-msg-inner {

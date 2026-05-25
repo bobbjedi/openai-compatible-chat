@@ -13,7 +13,7 @@ export interface Session {
 export interface Message {
   id?: number;
   sessionId: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'searchResult';
   content: string;
   reasoning?: string;
   searchMeta?: {
