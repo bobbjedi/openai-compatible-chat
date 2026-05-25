@@ -147,7 +147,8 @@
             </div>
 
             <!-- Streaming indicator -->
-            <div v-if="store.isStreaming && !lastAssistantContent" class="chatgpt-msg-row chatgpt-msg--assistant">
+            <div v-if="(store.isStreaming && !lastAssistantContent)
+                || store.isSearching" class="chatgpt-msg-row chatgpt-msg--assistant">
                 <div class="chatgpt-msg-inner">
                     <div class="chatgpt-avatar">
                         <div class="chatgpt-avatar-assistant">
@@ -160,7 +161,11 @@
                         </div>
                     </div>
                     <div class="chatgpt-msg-content">
-                        <q-spinner-dots size="1rem" color="grey-6" />
+                        <q-spinner-dots v-if="!store.isSearching" size="1rem" color="grey-6" />
+                        <span v-else class="chatgpt-searching-indicator">
+                            <q-spinner size="1rem" color="grey-6" class="q-mr-sm" />
+                            Searching the web...
+                        </span>
                     </div>
                 </div>
             </div>

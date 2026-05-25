@@ -11,6 +11,7 @@ import {
   deleteMessage,
 } from 'src/services/db';
 import { streamChat, chat, type LlmMessage } from 'src/services/llmProvider';
+import { searchWeb, formatSearchResults } from 'src/services/searchProvider';
 import { useSettingsStore } from './settingsStore';
 
 export { type Message, type Session };
@@ -21,6 +22,7 @@ export const useChatStore = defineStore('chat', () => {
   const currentSessionId = ref<string | null>(null);
   const messages = ref<Message[]>([]);
   const isStreaming = ref(false);
+  const isSearching = ref(false);
   const error = ref<string | null>(null);
   const isSummarizing = ref(false);
   const factsNotification = ref<string[] | null>(null);
@@ -106,12 +108,12 @@ export const useChatStore = defineStore('chat', () => {
 
   const displayMessages = computed(() => messages.value.filter((m) => {
     if (m.role === 'system') return false;
-    // Hide empty assistant message during streaming —
-    // a spinner is shown in the template instead.
-    // Exception: if reasoning already arrived, show the message
-    // so reasoning text appears while the model is still thinking.
-    if (m.role === 'assistant' && !m.content && isStreaming.value
-      && !m.reasoning) {
+    // Hide empty assistant messages — tool calls produce empty content
+    if (m.role === 'assistant' && !m.content && !m.reasoning) {
+      return false;
+    }
+    // Hide search result injections (shown to LLM, not to user)
+    if (m.role === 'user' && m.content.startsWith('[Search results for')) {
       return false;
     }
     return true;
@@ -378,6 +380,187 @@ ${dialogueText}`;
 
   // --- Messaging ---
 
+  const MAX_TOOL_ROUNDS = 3;
+
+  /**
+   * Detect a tool call JSON in the response text.
+   * Returns { query } if a search tool call is found, null otherwise.
+   */
+  function detectToolCall(text: string): { query: string } | null {
+    // Match {"search":"<query>"} anywhere in the text
+    // (LLM may add text before/after the JSON)
+    const match = /\{\s*"search"\s*:\s*"([^"]+)"\s*\}/.exec(text);
+    if (match) {
+      return { query: match[1] };
+    }
+    return null;
+  }
+
+  /**
+   * Build system prompt extension with search tool instruction.
+   */
+  function searchSystemPrompt(): string {
+    return `[WEB SEARCH TOOL]
+If you need information from the internet to answer the user's question, respond EXACTLY with:
+{"search":"your search query"}
+Do NOT add any other text before or after the JSON. After you do this, you will receive search results and can then formulate your final answer. Only use this when the answer genuinely requires up-to-date or external information.`;
+  }
+
+  async function streamWithToolLoop(
+    settings: ReturnType<typeof useSettingsStore>,
+    sessionId: string,
+    initialMessages: LlmMessage[],
+    assistantIdx: number,
+  ): Promise<void> {
+    let round = 0;
+
+    /* eslint-disable no-await-in-loop, no-loop-func */
+    while (round < MAX_TOOL_ROUNDS) {
+      isStreaming.value = true;
+      abortController = new AbortController();
+
+      await new Promise<void>((resolve) => {
+        void streamChat(
+          {
+            endpoint: settings.endpoint,
+            apiKey: settings.apiKey,
+            model: settings.model,
+            messages: initialMessages,
+          },
+          {
+            onChunk(delta: string) {
+              if (assistantIdx >= 0) {
+                messages.value[assistantIdx].content += delta;
+              }
+            },
+            onReasoning(reasoning: string) {
+              if (assistantIdx >= 0) {
+                if (!messages.value[assistantIdx].reasoning) {
+                  messages.value[assistantIdx].reasoning = '';
+                }
+                messages.value[assistantIdx].reasoning += reasoning;
+              }
+            },
+            onDone() {
+              // Check if the response is a tool call
+              const text = messages.value[assistantIdx]?.content || '';
+              const tool = detectToolCall(text);
+
+              if (tool) {
+                // Trigger tool execution below (outside this promise)
+                abortController = null;
+                isStreaming.value = false;
+                resolve();
+                return;
+              }
+
+              // Normal completion
+              if (assistantIdx >= 0) {
+                void putMessage({ ...toRaw(messages.value[assistantIdx]) });
+              }
+              void maybeSummarize();
+              abortController = null;
+              isStreaming.value = false;
+              resolve();
+            },
+            onError(err: Error) {
+              error.value = err.message;
+              if (assistantIdx >= 0 && !messages.value[assistantIdx].content
+                && !messages.value[assistantIdx].reasoning) {
+                messages.value.splice(assistantIdx, 1);
+              }
+              abortController = null;
+              isStreaming.value = false;
+              resolve();
+            },
+          },
+          abortController!.signal,
+        );
+      });
+
+      // After stream ends, check for tool call
+      if (!settings.searchEnabled || !settings.searchApiKey) break;
+
+      const text = messages.value[assistantIdx]?.content || '';
+      const tool = detectToolCall(text);
+
+      if (!tool) break; // No tool call — done
+
+      round += 1;
+
+      // Execute search
+      // eslint-disable-next-line no-console
+      console.log(`[tool] Searching for: "${tool.query}"`);
+      isSearching.value = true;
+
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const results = await searchWeb(tool.query, settings.searchApiKey);
+        const formatted = formatSearchResults(results);
+
+        // eslint-disable-next-line no-console
+        console.log('[tool] Search results:', results.results.length, 'items');
+
+        // Replace tool call JSON with search result in message history (not shown to user)
+        messages.value[assistantIdx].content = '';
+
+        // Add search result as a user message so buildTrimmedMessages picks it up
+        // (buildTrimmedMessages only collects user/assistant roles)
+        const searchResultMsg: Message = {
+          sessionId,
+          role: 'user',
+          content: `[Search results for "${tool.query}"]:\n${formatted}`,
+          createdAt: Date.now(),
+        };
+        // eslint-disable-next-line no-await-in-loop
+        await putMessage(searchResultMsg);
+        messages.value.push(searchResultMsg);
+
+        // Add new assistant message for the final response
+        const newMsg: Message = {
+          sessionId,
+          role: 'assistant',
+          content: '',
+          createdAt: Date.now(),
+        };
+        // eslint-disable-next-line no-await-in-loop
+        const newId = await putMessage(newMsg);
+        newMsg.id = newId;
+        messages.value.push(newMsg);
+        assistantIdx = messages.value.findIndex((m) => m.id === newId);
+
+        // Rebuild payload for next round, preserving the search tool prompt
+        const session = sessions.value.find((s) => s.id === sessionId);
+        initialMessages = buildTrimmedMessages(
+          messages.value,
+          undefined,
+          session?.summary,
+          settings.userFacts,
+          settings.tokenLimit,
+        );
+        // Re-insert search tool instruction (may be needed if LLM needs another search)
+        const searchPrompt = searchSystemPrompt();
+        const systemMsgs2: LlmMessage[] = [];
+        if (session?.systemPrompt) {
+          systemMsgs2.push({ role: 'system', content: session.systemPrompt });
+        }
+        systemMsgs2.push({ role: 'system', content: searchPrompt });
+        initialMessages = [
+          ...systemMsgs2,
+          ...initialMessages.filter((m) => m.role !== 'system'),
+        ];
+      } catch (searchErr) {
+        error.value = `Search error: ${(searchErr as Error).message}`;
+        // eslint-disable-next-line no-console
+        console.warn('[tool] Search error:', searchErr);
+        break;
+      } finally {
+        isSearching.value = false;
+      }
+    }
+    /* eslint-enable no-await-in-loop, no-loop-func */
+  }
+
   async function sendMessage(text: string) {
     const settings = useSettingsStore();
     await settings.load();
@@ -430,14 +613,30 @@ ${dialogueText}`;
     assistantMsg.id = assistantId;
     messages.value.push(assistantMsg);
 
-    // 3. Build API payload (with token trimming from settings)
-    const llmMessages = buildTrimmedMessages(
+    const idx = messages.value.findIndex((m) => m.id === assistantId);
+
+    // 3. Build API payload with search prompt if enabled
+    const searchPrompt = settings.searchEnabled && settings.searchApiKey
+      ? searchSystemPrompt()
+      : '';
+
+    const systemMsgs: LlmMessage[] = [];
+    if (session?.systemPrompt) {
+      systemMsgs.push({ role: 'system', content: session.systemPrompt });
+    }
+    if (searchPrompt) {
+      systemMsgs.push({ role: 'system', content: searchPrompt });
+    }
+
+    // Build payload using raw messages but prepend system messages
+    let llmMessages = buildTrimmedMessages(
       messages.value,
-      session?.systemPrompt,
+      undefined, // system prompt handled above
       session?.summary,
       settings.userFacts,
       settings.tokenLimit,
     );
+    llmMessages = [...systemMsgs, ...llmMessages.filter((m) => m.role !== 'system')];
 
     // eslint-disable-next-line no-console
     console.log('[sendMessage] Payload →', JSON.stringify({
@@ -446,54 +645,8 @@ ${dialogueText}`;
       messages: llmMessages,
     }, null, 2));
 
-    // 4. Streaming
-    isStreaming.value = true;
-    abortController = new AbortController();
-
-    const idx = messages.value.findIndex((m) => m.id === assistantId);
-
-    try {
-      await streamChat(
-        {
-          endpoint: settings.endpoint,
-          apiKey: settings.apiKey,
-          model: settings.model,
-          messages: llmMessages,
-        },
-        {
-          onChunk(delta: string) {
-            if (idx >= 0) {
-              messages.value[idx].content += delta;
-            }
-          },
-          onReasoning(reasoning: string) {
-            if (idx >= 0) {
-              if (!messages.value[idx].reasoning) {
-                messages.value[idx].reasoning = '';
-              }
-              messages.value[idx].reasoning += reasoning;
-            }
-          },
-          onDone() {
-            if (idx >= 0) {
-              void putMessage({ ...toRaw(messages.value[idx]) });
-            }
-            void maybeSummarize();
-          },
-          onError(err: Error) {
-            error.value = err.message;
-            if (idx >= 0 && !messages.value[idx].content
-              && !messages.value[idx].reasoning) {
-              messages.value.splice(idx, 1);
-            }
-          },
-        },
-        abortController.signal,
-      );
-    } finally {
-      isStreaming.value = false;
-      abortController = null;
-    }
+    // 4. Stream with tool loop
+    await streamWithToolLoop(settings, sid, llmMessages, idx);
   }
 
   function cancelStream() {
@@ -541,14 +694,28 @@ ${dialogueText}`;
     messages.value.push(assistantMsg);
 
     const session = sessions.value.find((s) => s.id === sid);
-    // Build payload with token trimming from settings
-    const llmMessages = buildTrimmedMessages(
+
+    // Build API payload with search prompt if enabled
+    const searchPrompt = settings.searchEnabled && settings.searchApiKey
+      ? searchSystemPrompt()
+      : '';
+
+    const systemMsgs: LlmMessage[] = [];
+    if (session?.systemPrompt) {
+      systemMsgs.push({ role: 'system', content: session.systemPrompt });
+    }
+    if (searchPrompt) {
+      systemMsgs.push({ role: 'system', content: searchPrompt });
+    }
+
+    let llmMessages = buildTrimmedMessages(
       messages.value,
-      session?.systemPrompt,
+      undefined,
       session?.summary,
       settings.userFacts,
       settings.tokenLimit,
     );
+    llmMessages = [...systemMsgs, ...llmMessages.filter((m) => m.role !== 'system')];
 
     // eslint-disable-next-line no-console
     console.log('[editMessage] Payload →', JSON.stringify({
@@ -557,51 +724,9 @@ ${dialogueText}`;
       messages: llmMessages,
     }, null, 2));
 
-    isStreaming.value = true;
-    abortController = new AbortController();
-
-    const aidx = messages.value.findIndex((m) => m.id === assistantId);
-
-    try {
-      await streamChat(
-        {
-          endpoint: settings.endpoint,
-          apiKey: settings.apiKey,
-          model: settings.model,
-          messages: llmMessages,
-        },
-        {
-          onChunk(delta: string) {
-            if (aidx >= 0) messages.value[aidx].content += delta;
-          },
-          onReasoning(reasoning: string) {
-            if (aidx >= 0) {
-              if (!messages.value[aidx].reasoning) {
-                messages.value[aidx].reasoning = '';
-              }
-              messages.value[aidx].reasoning += reasoning;
-            }
-          },
-          onDone() {
-            if (aidx >= 0) {
-              void putMessage({ ...toRaw(messages.value[aidx]) });
-            }
-            void maybeSummarize();
-          },
-          onError(err: Error) {
-            error.value = err.message;
-            if (aidx >= 0 && !messages.value[aidx].content
-              && !messages.value[aidx].reasoning) {
-              messages.value.splice(aidx, 1);
-            }
-          },
-        },
-        abortController.signal,
-      );
-    } finally {
-      isStreaming.value = false;
-      abortController = null;
-    }
+    // Stream with tool loop
+    const editAidx = messages.value.findIndex((m) => m.id === assistantId);
+    await streamWithToolLoop(settings, sid, llmMessages, editAidx);
   }
 
   // --- Initialization ---
@@ -619,6 +744,7 @@ ${dialogueText}`;
     currentSessionId,
     messages,
     isStreaming,
+    isSearching,
     error,
     // getters
     currentSession,

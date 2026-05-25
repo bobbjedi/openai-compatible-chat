@@ -16,6 +16,10 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   reasoning?: string;
+  searchMeta?: {
+    query: string;
+    resultsCount: number;
+  };
   createdAt: number;
 }
 

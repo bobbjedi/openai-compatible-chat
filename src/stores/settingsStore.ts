@@ -47,6 +47,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const summaryModel = ref('deepseek-chat');
   const tokenLimit = ref(200000);
   const userFacts = ref<string[]>([]);
+  const searchApiKey = ref('');
+  const searchEnabled = ref(false);
   const darkMode = ref(loadDarkMode());
 
   // Apply theme immediately on store init
@@ -56,19 +58,23 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function load() {
     if (loaded) return;
-    const [ep, key, mdl, smdl, tkl, facts] = await Promise.all([
+    const [ep, key, mdl, smdl, tkl, facts, srchKey, srchEnb] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
       getSetting('model'),
       getSetting('summaryModel'),
       getSetting('tokenLimit'),
       getSetting('userFacts'),
+      getSetting('searchApiKey'),
+      getSetting('searchEnabled'),
     ]);
     if (ep) endpoint.value = ep;
     if (key) apiKey.value = key;
     if (mdl) model.value = mdl;
     if (smdl) summaryModel.value = smdl;
     if (tkl) tokenLimit.value = parseInt(tkl, 10) || 200000;
+    if (srchKey) searchApiKey.value = srchKey;
+    if (srchEnb) searchEnabled.value = srchEnb === 'true';
     userFacts.value = deserializeFacts(facts);
     loaded = true;
   }
@@ -118,6 +124,16 @@ export const useSettingsStore = defineStore('settings', () => {
     await saveUserFacts(updated);
   }
 
+  async function saveSearchApiKey(val: string) {
+    searchApiKey.value = val;
+    await putSetting('searchApiKey', val);
+  }
+
+  async function saveSearchEnabled(val: boolean) {
+    searchEnabled.value = val;
+    await putSetting('searchEnabled', String(val));
+  }
+
   function toggleDarkMode() {
     darkMode.value = !darkMode.value;
     Dark.set(darkMode.value);
@@ -131,6 +147,8 @@ export const useSettingsStore = defineStore('settings', () => {
     summaryModel,
     tokenLimit,
     userFacts,
+    searchApiKey,
+    searchEnabled,
     darkMode,
     load,
     saveEndpoint,
@@ -139,6 +157,8 @@ export const useSettingsStore = defineStore('settings', () => {
     saveSummaryModel,
     saveTokenLimit,
     saveUserFacts,
+    saveSearchApiKey,
+    saveSearchEnabled,
     addFact,
     removeFact,
     toggleDarkMode,

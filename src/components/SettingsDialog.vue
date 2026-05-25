@@ -46,6 +46,19 @@
             </q-item>
           </template>
         </q-select>
+
+        <q-separator spaced />
+
+        <div class="text-subtitle2 text-grey-8 q-mb-sm">Web Search (Tavily)</div>
+        <q-toggle v-model="localSearchEnabled" dense label="Enable web search"
+          hint="Model can search the internet when needed" />
+        <q-input v-model="localSearchApiKey" outlined dense label="Tavily API Key"
+          :type="showSearchKey ? 'text' : 'password'" hint="Get key at tavily.com" :disable="!localSearchEnabled">
+          <template #append>
+            <q-btn flat dense round :icon="showSearchKey ? 'visibility_off' : 'visibility'"
+              @click="showSearchKey = !showSearchKey" />
+          </template>
+        </q-input>
       </q-card-section>
 
       <q-card-actions align="right">
@@ -83,7 +96,10 @@ export default defineComponent({
     const localModel = ref(store.model);
     const localSummaryModel = ref(store.summaryModel);
     const localTokenLimit = ref(store.tokenLimit);
+    const localSearchApiKey = ref(store.searchApiKey);
+    const localSearchEnabled = ref(store.searchEnabled);
     const showKey = ref(false);
+    const showSearchKey = ref(false);
     const modelOptions = ref([...KNOWN_MODELS]);
 
     const visible = computed({
@@ -99,6 +115,8 @@ export default defineComponent({
         localModel.value = store.model;
         localSummaryModel.value = store.summaryModel;
         localTokenLimit.value = store.tokenLimit;
+        localSearchApiKey.value = store.searchApiKey;
+        localSearchEnabled.value = store.searchEnabled;
       }
     });
 
@@ -129,6 +147,8 @@ export default defineComponent({
         store.saveModel(localModel.value.trim()),
         store.saveSummaryModel(localSummaryModel.value.trim()),
         store.saveTokenLimit(localTokenLimit.value || 200000),
+        store.saveSearchApiKey(localSearchApiKey.value.trim()),
+        store.saveSearchEnabled(localSearchEnabled.value),
       ]);
       emit('update:modelValue', false);
     }
@@ -139,7 +159,10 @@ export default defineComponent({
       localModel,
       localSummaryModel,
       localTokenLimit,
+      localSearchApiKey,
+      localSearchEnabled,
       showKey,
+      showSearchKey,
       modelOptions,
       visible,
       isValid,
