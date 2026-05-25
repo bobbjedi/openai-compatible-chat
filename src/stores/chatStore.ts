@@ -23,7 +23,7 @@ export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false);
   const error = ref<string | null>(null);
   const isSummarizing = ref(false);
-  const factsNotification = ref<string | null>(null);
+  const factsNotification = ref<string[] | null>(null);
 
   let abortController: AbortController | null = null;
 
@@ -38,7 +38,7 @@ export const useChatStore = defineStore('chat', () => {
     messagesArr: Message[],
     systemPrompt?: string,
     summary?: string,
-    userFacts?: string,
+    userFacts?: string[],
     maxTokens?: number,
   ): LlmMessage[] {
     const limit = maxTokens || 200000;
@@ -52,12 +52,13 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     // User Facts — global knowledge base, injected after system prompt
-    if (userFacts) {
+    if (userFacts && userFacts.length > 0) {
+      const factsText = userFacts.map((f) => `- ${f}`).join('\n');
       result.push({
         role: 'system',
-        content: `[Global facts known about the user, use this info when relevant]\n${userFacts}`,
+        content: `[Global facts known about the user, use this info when relevant]\n${factsText}`,
       });
-      tokenBudget += estimateTokens(userFacts) + 16;
+      tokenBudget += estimateTokens(factsText) + 16;
     }
 
     // Rolling summary — inserted after system prompt as conversation history context
@@ -256,60 +257,99 @@ Write an updated summary of the entire conversation (preserve key information fr
       }
 
       // --- Extract / update User Facts ---
-      // Take the full set of user/assistant messages for broader context
-      const allUserAssistant = messages.value.filter(
-        (m) => m.role === 'user' || m.role === 'assistant',
-      );
-      if (allUserAssistant.length > 0 && settings.userFacts !== undefined) {
-        try {
-          const prevFacts = settings.userFacts
-            ? `Current known facts about the user:\n${settings.userFacts}\n\n---\n`
-            : '';
+      try {
+        const existingFacts = settings.userFacts;
+        const prevFactsBlock = existingFacts.length > 0
+          ? `- ${existingFacts.join('\n- ')}\n\n---\n`
+          : '';
 
-          const factsPrompt = `You are an assistant that maintains a "knowledge base" about the user (User Facts). Extract facts from the conversation that influence future decisions or have long-term value: name, preferences, pets, projects, technologies, habits, important events, work context, etc.
+        const factsPrompt = `Ты — строгий фильтр фактов. Твоя задача — вести минимальную базу знаний о пользователе.
 
-**Selection criteria:** a fact should be kept only if it influences future decisions or has long-term value.
-✅ Example of a fact: "Has a ginger cat named Lala, died around May 2025" — this is long-term information about a pet.
-❌ Not a fact: "I'm in a bad mood today" — a temporary state, does not affect future conversations.
+ГЛАВНОЕ ПРАВИЛО: в 90% случаев ты не должен добавлять НИЧЕГО. Большинство диалогов не содержат информации, ценной в долгосрочной перспективе.
 
-${prevFacts}Latest conversation:
-${dialogueText}
+Факт добавляется, только если выполнены ВСЕ три условия:
+1. Эта информация будет важна в разговоре через 3 месяца
+2. Без неё будущие ответы были бы ХУЖЕ
+3. Эту информацию нельзя понять из текущего контекста диалога
 
-Update the facts list (keep old ones, add new ones, correct contradictions). Write in the same language as the conversation. Format: markdown, concise bullet points. Do not include temporary moods, one-day plans, or trivial information.`;
+Когда ДОБАВЛЯЕМ (РЕДКО — только если пользователь явно сообщил):
+- «Работает с TypeScript + Vue 3» — влияет на примеры кода
+- «Аллергия на арахис» — влияет на рекомендации еды
+- «Живёт в Берлине» — влияет на часовой пояс, локацию
 
-          // eslint-disable-next-line no-console
-          console.log('[maybeSummarize] Extracting User Facts, model:', summaryModel);
-          // eslint-disable-next-line no-console
-          console.log('[maybeSummarize] Facts payload →', JSON.stringify({
+Когда НЕ ДОБАВЛЯЕМ (99% случаев):
+- Настроение, планы на день, временные ситуации
+- Технический вопрос, который прямо сейчас обсуждается
+- Мнения, которые могут измениться («Мне кажется X лучше Y»)
+- Детали проекта, если не сказано явно что это надолго
+- Всё, что пользователь не назвал фактом о себе
+
+ФОРМАТ ОТВЕТА: каждая строка — один факт. Один факт = одно предложение не длиннее 120 символов.
+Верни полный обновлённый список (старые факты + новые).
+Если добавлять нечего — верни существующий список без изменений.
+Факты должны быть на том же языке, что и диалог.
+
+Существующие факты:
+${prevFactsBlock}
+Последний диалог:
+${dialogueText}`;
+
+        // eslint-disable-next-line no-console
+        console.log('[maybeSummarize] Extracting User Facts, model:', summaryModel);
+        // eslint-disable-next-line no-console
+        console.log('[maybeSummarize] Facts payload →', JSON.stringify({
+          endpoint: settings.endpoint,
+          model: summaryModel,
+          promptLength: factsPrompt.length,
+          prevFactsCount: existingFacts.length,
+          recentMessages: recentBatch.length,
+        }, null, 2));
+
+        const rawFacts = await chat(
+          {
             endpoint: settings.endpoint,
+            apiKey: settings.apiKey,
             model: summaryModel,
-            promptLength: factsPrompt.length,
-            prevFactsLength: settings.userFacts.length,
-            recentMessages: recentBatch.length,
-          }, null, 2));
+            messages: [{ role: 'user', content: factsPrompt }],
+          },
+        );
 
-          const newFacts = await chat(
-            {
-              endpoint: settings.endpoint,
-              apiKey: settings.apiKey,
-              model: summaryModel,
-              messages: [{ role: 'user', content: factsPrompt }],
-            },
-          );
+        if (rawFacts) {
+          // Parse response: split by newlines, strip bullets, filter, deduplicate
+          const parsedFacts = rawFacts
+            .split('\n')
+            .map((line) => line.replace(/^[-*•]\s*/, '').trim())
+            .filter((line) => line.length > 0 && line.length <= 200)
+            .filter((line, idx, arr) => arr.indexOf(line) === idx); // dedup
 
-          if (newFacts) {
-            await settings.saveUserFacts(newFacts.trim());
+          if (parsedFacts.length > 0) {
+            // Only count as "changed" if the list actually differs
+            const prevJson = JSON.stringify(existingFacts);
+            const newJson = JSON.stringify(parsedFacts);
+            const hasChanges = prevJson !== newJson;
+
+            await settings.saveUserFacts(parsedFacts);
 
             // eslint-disable-next-line no-console
-            console.log('[maybeSummarize] User Facts updated, length:', newFacts.length);
+            console.log('[maybeSummarize] User Facts updated, count:', parsedFacts.length,
+              hasChanges ? '(changed)' : '(unchanged)');
 
-            // Show notification in chat
-            factsNotification.value = newFacts.trim();
+            // Show notification only if facts actually changed
+            if (hasChanges) {
+              const newOnes = parsedFacts.filter(
+                (f: string) => !existingFacts.some(
+                  (ef: string) => ef.toLowerCase() === f.toLowerCase(),
+                ),
+              );
+              factsNotification.value = newOnes.length > 0
+                ? newOnes
+                : parsedFacts;
+            }
           }
-        } catch (factsErr) {
-          // eslint-disable-next-line no-console
-          console.warn('[maybeSummarize] Error extracting facts:', factsErr);
         }
+      } catch (factsErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[maybeSummarize] Error extracting facts:', factsErr);
       }
     } catch (err) {
       // eslint-disable-next-line no-console

@@ -21,34 +21,36 @@
         </q-banner>
 
         <!-- Facts notification -->
-        <div v-if="store.factsNotification" class="chatgpt-facts-banner">
+        <div v-if="store.factsNotification
+            && store.factsNotification.length > 0" class="chatgpt-facts-banner">
             <div class="chatgpt-facts-banner-header">
                 <q-icon name="fact_check" color="accent" size="sm" />
-                <span class="text-weight-medium">🧠 New facts extracted</span>
+                <span class="text-weight-medium">
+                    🧠 {{ store.factsNotification.length }} new fact(s) extracted
+                </span>
                 <q-space />
                 <q-btn v-if="!showFullFacts && !editingFactsInline" flat dense no-caps size="sm" color="accent"
                     label="Show" @click="showFullFacts = true" />
                 <q-btn v-else-if="!editingFactsInline" flat dense no-caps size="sm" color="accent" label="Hide"
                     @click="showFullFacts = false" />
-                <q-btn v-if="!editingFactsInline" flat dense round size="sm" icon="edit" color="grey-6"
-                    @click="startEditFactsInline">
-                    <q-tooltip>Edit facts</q-tooltip>
-                </q-btn>
-                <q-btn v-else flat dense no-caps size="sm" color="primary" label="Save" @click="saveFactsInline" />
+                <q-btn v-if="editingFactsInline" flat dense no-caps size="sm" color="primary" label="Save"
+                    @click="saveFactsInline" />
                 <q-btn v-if="!editingFactsInline" flat dense round size="sm" icon="close" color="grey-6"
                     @click="store.factsNotification = null">
                     <q-tooltip>Dismiss</q-tooltip>
                 </q-btn>
             </div>
             <div v-if="showFullFacts && !editingFactsInline" class="chatgpt-facts-banner-body">
-                <div class="chatgpt-facts-text-small">{{ store.factsNotification }}</div>
+                <ul class="chatgpt-facts-list-small">
+                    <li v-for="(fact, i) in store.factsNotification" :key="i">{{ fact }}</li>
+                </ul>
             </div>
             <div v-if="editingFactsInline" class="chatgpt-facts-banner-body">
+                <div class="text-caption text-grey-6 q-mb-sm">
+                    One fact per line. Ctrl+Enter to save.
+                </div>
                 <q-input v-model="factsEditText" outlined dense autogrow type="textarea"
                     class="chatgpt-facts-edit-input" @keydown.ctrl.enter="saveFactsInline" />
-                <div class="text-caption text-grey-6 q-mt-sm">
-                    Ctrl+Enter to save · Markdown supported
-                </div>
             </div>
         </div>
 
@@ -252,14 +254,18 @@ export default defineComponent({
         }
 
         function startEditFactsInline() {
-            factsEditText.value = store.factsNotification || '';
+            factsEditText.value = (store.factsNotification || []).join('\n');
             editingFactsInline.value = true;
             showFullFacts.value = true;
         }
 
         async function saveFactsInline() {
             if (factsEditText.value.trim()) {
-                await settingsStore.saveUserFacts(factsEditText.value.trim());
+                const lines = factsEditText.value
+                    .split('\n')
+                    .map((l: string) => l.trim())
+                    .filter((l: string) => l.length > 0);
+                await settingsStore.saveUserFacts(lines);
                 store.factsNotification = null;
             }
             editingFactsInline.value = false;

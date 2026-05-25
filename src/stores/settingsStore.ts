@@ -21,13 +21,32 @@ function saveDarkMode(val: boolean): void {
   }
 }
 
+function serializeFacts(arr: string[]): string {
+  return JSON.stringify(arr);
+}
+
+function deserializeFacts(raw: string | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (f: unknown) => typeof f === 'string' && f.trim().length > 0,
+      ) as string[];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const endpoint = ref('https://api.deepseek.com/v1');
   const apiKey = ref('');
   const model = ref('deepseek-chat');
   const summaryModel = ref('deepseek-chat');
   const tokenLimit = ref(200000);
-  const userFacts = ref('');
+  const userFacts = ref<string[]>([]);
   const darkMode = ref(loadDarkMode());
 
   // Apply theme immediately on store init
@@ -50,7 +69,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (mdl) model.value = mdl;
     if (smdl) summaryModel.value = smdl;
     if (tkl) tokenLimit.value = parseInt(tkl, 10) || 200000;
-    if (facts) userFacts.value = facts;
+    userFacts.value = deserializeFacts(facts);
     loaded = true;
   }
 
@@ -79,9 +98,24 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('tokenLimit', String(val));
   }
 
-  async function saveUserFacts(val: string) {
-    userFacts.value = val;
-    await putSetting('userFacts', val);
+  async function saveUserFacts(arr: string[]) {
+    userFacts.value = arr;
+    await putSetting('userFacts', serializeFacts(arr));
+  }
+
+  async function addFact(fact: string) {
+    const trimmed = fact.trim();
+    if (!trimmed) return;
+    // Don't add duplicates
+    if (userFacts.value.some((f: string) => f.toLowerCase() === trimmed.toLowerCase())) return;
+    const updated = [...userFacts.value, trimmed];
+    await saveUserFacts(updated);
+  }
+
+  async function removeFact(index: number) {
+    if (index < 0 || index >= userFacts.value.length) return;
+    const updated = userFacts.value.filter((_f: string, i: number) => i !== index);
+    await saveUserFacts(updated);
   }
 
   function toggleDarkMode() {
@@ -105,6 +139,8 @@ export const useSettingsStore = defineStore('settings', () => {
     saveSummaryModel,
     saveTokenLimit,
     saveUserFacts,
+    addFact,
+    removeFact,
     toggleDarkMode,
   };
 });
