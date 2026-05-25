@@ -2,7 +2,7 @@
     <div class="chatgpt-input-wrapper">
         <div class="chatgpt-input-inner">
             <q-input v-model="text" outlined dense autogrow placeholder="Message ChatGPT..."
-                :disable="store.isStreaming" class="chatgpt-input" @keydown.enter.exact.prevent="submit">
+                :disable="store.isStreaming" class="chatgpt-input" @keydown.enter.exact="onEnterKey">
                 <template #append>
                     <q-btn v-if="recognitionSupported" flat dense round size="sm"
                         :icon="isListening ? 'mic' : 'mic_none'" :color="isListening ? 'red' : 'black'"
@@ -101,10 +101,23 @@ export default defineComponent({
             text.value = '';
             void store.sendMessage(val);
         }
+
+        const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
+
+        function onEnterKey(e: KeyboardEvent) {
+            if (isMobile) {
+                // Mobile: Enter → newline (default), send only via button
+                return;
+            }
+            // Desktop: Enter → send, Shift+Enter → newline
+            if (e.shiftKey) return; // newline
+            e.preventDefault();
+            submit();
+        }
         /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 
         return {
-            text, store, submit, isListening, recognitionSupported, toggleListening,
+            text, store, onEnterKey, submit, isListening, recognitionSupported, toggleListening,
         };
     },
 });
