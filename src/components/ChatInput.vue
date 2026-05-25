@@ -1,8 +1,28 @@
 <template>
     <div class="chatgpt-input-wrapper">
+        <!-- File chips -->
+        <div v-if="pendingFiles.length > 0" class="chatgpt-file-chips">
+            <q-chip v-for="(f, i) in pendingFiles" :key="i" dense removable color="grey-3" text-color="black"
+                class="chatgpt-file-chip" @remove="removeFile(i)">
+                <q-icon name="description" size="xs" class="q-mr-xs" />
+                {{ f.name }}
+                <span class="chatgpt-file-size text-caption text-grey-6 q-ml-xs">
+                    ({{ formatSize(f.size) }})
+                </span>
+            </q-chip>
+        </div>
         <div class="chatgpt-input-inner">
+            <!-- Hidden file input -->
+            <input ref="fileInputRef" type="file" multiple class="chatgpt-file-input-hidden"
+                @change="onFilesSelected" />
             <q-input v-model="text" outlined dense autogrow placeholder="Message ChatGPT..."
                 :disable="store.isStreaming" class="chatgpt-input" @keydown.enter.exact="onEnterKey">
+                <template #prepend>
+                    <q-btn flat dense round size="sm" icon="attach_file" :disable="store.isStreaming"
+                        @click="openFilePicker">
+                        <q-tooltip>Attach files</q-tooltip>
+                    </q-btn>
+                </template>
                 <template #append>
                     <q-btn v-if="recognitionSupported" flat dense round size="sm"
                         :icon="isListening ? 'mic' : 'mic_none'" :color="isListening ? 'red' : 'black'"
@@ -14,8 +34,8 @@
                         @click="store.cancelStream()">
                         <q-tooltip>Stop</q-tooltip>
                     </q-btn>
-                    <q-btn v-else flat dense round size="sm" icon="arrow_upward" color="black" :disable="!text.trim()"
-                        class="chatgpt-send-btn" @click="submit" />
+                    <q-btn v-else flat dense round size="sm" icon="arrow_upward" color="black"
+                        :disable="!text.trim() && pendingFiles.length === 0" class="chatgpt-send-btn" @click="submit" />
                 </template>
             </q-input>
             <p class="chatgpt-disclaimer text-caption text-grey-6">
@@ -28,6 +48,7 @@
 <script lang="ts">
 import { defineComponent, ref } from 'vue';
 import { useChatStore } from 'src/stores/chatStore';
+import { parseFiles, type ParseResult } from 'src/services/fileParser';
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 let SpeechRecognitionAPI: any = null;
@@ -41,8 +62,33 @@ export default defineComponent({
     setup() {
         const store = useChatStore();
         const text = ref('');
+        const pendingFiles = ref<File[]>([]);
+        const fileInputRef = ref<HTMLInputElement | null>(null);
         const isListening = ref(false);
         const recognitionSupported = ref(!!SpeechRecognitionAPI);
+
+        function formatSize(bytes: number): string {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function openFilePicker() {
+            fileInputRef.value?.click();
+        }
+
+        function onFilesSelected(e: Event) {
+            const input = e.target as HTMLInputElement;
+            if (input.files) {
+                pendingFiles.value.push(...Array.from(input.files));
+            }
+            // Reset so the same file can be selected again
+            input.value = '';
+        }
+
+        function removeFile(index: number) {
+            pendingFiles.value.splice(index, 1);
+        }
 
         /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
         let recognition: any = null;
@@ -52,7 +98,6 @@ export default defineComponent({
             recognition = new SpeechRecognitionAPI();
             recognition.continuous = true;
             recognition.interimResults = true;
-            // Try navigator.languages (ordered preferences), then Intl (OS locale), then navigator.language
             const langs = navigator.languages?.length
                 ? navigator.languages
                 : [Intl.DateTimeFormat().resolvedOptions().locale, navigator.language];
@@ -61,11 +106,9 @@ export default defineComponent({
 
             recognition.onresult = (event: any) => {
                 let result = '';
-                // Iterate only NEW results (from resultIndex), not all
                 for (let i = event.resultIndex; i < event.results.length; i += 1) {
                     result += event.results[i][0].transcript;
                 }
-                // Append only FINAL fragments with spaces around them
                 if (event.results[event.resultIndex]?.isFinal) {
                     text.value += ` ${result} `;
                 }
@@ -92,32 +135,54 @@ export default defineComponent({
             }
         }
 
-        function submit() {
+        async function submit() {
             const val = text.value.trim();
-            if (!val || store.isStreaming) return;
+            const hasFiles = pendingFiles.value.length > 0;
+            // eslint-disable-next-line no-console
+            console.log('[ChatInput] submit: text="', val, '" hasFiles=', hasFiles, 'files=', pendingFiles.value.map((f) => f.name));
+            if ((!val && !hasFiles) || store.isStreaming) return;
             if (isListening.value) {
                 recognition?.stop();
             }
+
+            let parsed: ParseResult[] | undefined;
+            if (hasFiles) {
+                parsed = await parseFiles(pendingFiles.value);
+                // eslint-disable-next-line no-console
+                console.log('[ChatInput] parsed:', parsed.map((p) => ({ name: p.name, len: p.text.length })));
+                pendingFiles.value = [];
+            }
+
             text.value = '';
-            void store.sendMessage(val);
+            void store.sendMessage(val || '(attached files)', parsed);
         }
 
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
 
         function onEnterKey(e: KeyboardEvent) {
             if (isMobile) {
-                // Mobile: Enter → newline (default), send only via button
                 return;
             }
-            // Desktop: Enter → send, Shift+Enter → newline
-            if (e.shiftKey) return; // newline
+            if (e.shiftKey) return;
             e.preventDefault();
-            submit();
+            void submit();
         }
         /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 
         return {
-            text, store, onEnterKey, submit, isListening, recognitionSupported, toggleListening,
+            text,
+            store,
+            onEnterKey,
+            submit,
+            isListening,
+            recognitionSupported,
+            toggleListening,
+            pendingFiles,
+            fileInputRef,
+            openFilePicker,
+            onFilesSelected,
+            removeFile,
+            formatSize,
         };
     },
 });

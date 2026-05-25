@@ -103,6 +103,15 @@
                                 {{ msg.searchMeta.resultsCount }} result(s)
                             </span>
                         </div>
+                        <!-- File attachments chips in user messages -->
+                        <div v-if="msg.attachments && msg.attachments.length > 0" class="chatgpt-attachments-row">
+                            <div v-for="att in msg.attachments" :key="att.name" class="chatgpt-attachment-chip">
+                                <q-icon name="description" size="xs" class="q-mr-xs" />
+                                <span class="text-weight-medium">{{ att.name }}</span>
+                                <span class="text-grey-6 q-ml-xs text-caption">
+                                    ({{ attSize(att.size) }}) </span>
+                            </div>
+                        </div>
                         <!-- Edit mode for user messages -->
                         <div v-if="editingId === msg.id" class="chatgpt-edit-area">
                             <q-input v-model="editText" outlined dense autogrow type="textarea"
@@ -349,6 +358,12 @@ export default defineComponent({
             void nextTick().then(scrollToBottom);
         }
 
+        function attSize(bytes: number): string {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / 1048576).toFixed(1)} MB`;
+        }
+
         return {
             store,
             scrollRef,
@@ -368,6 +383,7 @@ export default defineComponent({
             toggleReasoning,
             startEditFactsInline,
             saveFactsInline,
+            attSize,
         };
     },
 });

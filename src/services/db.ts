@@ -10,6 +10,12 @@ export interface Session {
   summaryEnabled?: boolean;
 }
 
+export interface AttachmentMeta {
+  name: string;
+  type: string;
+  size: number;
+}
+
 export interface Message {
   id?: number;
   sessionId: string;
@@ -20,6 +26,7 @@ export interface Message {
     query: string;
     resultsCount: number;
   };
+  attachments?: AttachmentMeta[];
   createdAt: number;
 }
 

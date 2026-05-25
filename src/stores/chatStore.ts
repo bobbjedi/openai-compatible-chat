@@ -3,6 +3,7 @@ import { ref, computed, toRaw } from 'vue';
 import {
   type Message,
   type Session,
+  type AttachmentMeta,
   getAllSessions,
   getMessages,
   putSession,
@@ -12,6 +13,7 @@ import {
 } from 'src/services/db';
 import { streamChat, chat, type LlmMessage } from 'src/services/llmProvider';
 import { searchWeb, formatSearchResults } from 'src/services/searchProvider';
+import { type ParseResult } from 'src/services/fileParser';
 import { useSettingsStore } from './settingsStore';
 
 export { type Message, type Session };
@@ -600,7 +602,9 @@ ${dialogueText}`;
     /* eslint-enable no-await-in-loop, no-loop-func */
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, parsedFiles?: ParseResult[]) {
+    // eslint-disable-next-line no-console
+    console.log('[chatStore] sendMessage: text="', text, '" parsedFiles=', parsedFiles?.map((f) => ({ name: f.name, len: f.text.length })));
     const settings = useSettingsStore();
     await settings.load();
 
@@ -618,11 +622,26 @@ ${dialogueText}`;
     const now = Date.now();
     error.value = null;
 
-    // 1. Add user message
+    // Build attachments meta and the content block for LLM
+    const attachmentMetas: AttachmentMeta[] = [];
+    let filesContentText = '';
+
+    if (parsedFiles && parsedFiles.length > 0) {
+      parsedFiles.forEach((f) => {
+        attachmentMetas.push({ name: f.name, type: 'text/plain', size: f.size });
+        filesContentText += `[Attached file: ${f.name}]\n${f.text}\n\n`;
+      });
+      if (filesContentText) {
+        filesContentText += '---\n';
+      }
+    }
+
+    // 1. Add user message (only metadata saved, not file content)
     const userMsg: Message = {
       sessionId: sid,
       role: 'user',
       content: text,
+      attachments: attachmentMetas.length > 0 ? attachmentMetas : undefined,
       createdAt: now,
     };
     const userId = await putMessage(userMsg);
@@ -668,6 +687,8 @@ ${dialogueText}`;
     }
 
     // Build payload using raw messages but prepend system messages
+    // eslint-disable-next-line no-console
+    console.log('[chatStore] filesContentText len=', filesContentText.length);
     let llmMessages = buildTrimmedMessages(
       messages.value,
       undefined, // system prompt handled above
@@ -675,6 +696,16 @@ ${dialogueText}`;
       settings.userFacts,
       settings.tokenLimit,
     );
+
+    // If files are attached, inject their content before the last user message
+    if (filesContentText && llmMessages.length > 0) {
+      const lastUser = llmMessages.filter((m) => m.role === 'user').pop();
+      if (lastUser) {
+        // eslint-disable-next-line no-param-reassign
+        lastUser.content = filesContentText + lastUser.content;
+      }
+    }
+
     llmMessages = [...systemMsgs, ...llmMessages.filter((m) => m.role !== 'system')];
 
     // eslint-disable-next-line no-console
