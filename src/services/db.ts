@@ -15,6 +15,7 @@ export interface Message {
   sessionId: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  reasoning?: string;
   createdAt: number;
 }
 

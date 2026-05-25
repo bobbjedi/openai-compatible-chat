@@ -107,8 +107,11 @@ export const useChatStore = defineStore('chat', () => {
   const displayMessages = computed(() => messages.value.filter((m) => {
     if (m.role === 'system') return false;
     // Hide empty assistant message during streaming —
-    // a spinner is shown in the template instead
-    if (m.role === 'assistant' && !m.content && isStreaming.value) {
+    // a spinner is shown in the template instead.
+    // Exception: if reasoning already arrived, show the message
+    // so reasoning text appears while the model is still thinking.
+    if (m.role === 'assistant' && !m.content && isStreaming.value
+      && !m.reasoning) {
       return false;
     }
     return true;
@@ -463,6 +466,14 @@ ${dialogueText}`;
               messages.value[idx].content += delta;
             }
           },
+          onReasoning(reasoning: string) {
+            if (idx >= 0) {
+              if (!messages.value[idx].reasoning) {
+                messages.value[idx].reasoning = '';
+              }
+              messages.value[idx].reasoning += reasoning;
+            }
+          },
           onDone() {
             if (idx >= 0) {
               void putMessage({ ...toRaw(messages.value[idx]) });
@@ -471,7 +482,8 @@ ${dialogueText}`;
           },
           onError(err: Error) {
             error.value = err.message;
-            if (idx >= 0 && !messages.value[idx].content) {
+            if (idx >= 0 && !messages.value[idx].content
+              && !messages.value[idx].reasoning) {
               messages.value.splice(idx, 1);
             }
           },
@@ -562,6 +574,14 @@ ${dialogueText}`;
           onChunk(delta: string) {
             if (aidx >= 0) messages.value[aidx].content += delta;
           },
+          onReasoning(reasoning: string) {
+            if (aidx >= 0) {
+              if (!messages.value[aidx].reasoning) {
+                messages.value[aidx].reasoning = '';
+              }
+              messages.value[aidx].reasoning += reasoning;
+            }
+          },
           onDone() {
             if (aidx >= 0) {
               void putMessage({ ...toRaw(messages.value[aidx]) });
@@ -570,7 +590,8 @@ ${dialogueText}`;
           },
           onError(err: Error) {
             error.value = err.message;
-            if (aidx >= 0 && !messages.value[aidx].content) {
+            if (aidx >= 0 && !messages.value[aidx].content
+              && !messages.value[aidx].reasoning) {
               messages.value.splice(aidx, 1);
             }
           },

@@ -110,6 +110,20 @@
                             </div>
                         </div>
                         <div v-else>
+                            <!-- Reasoning (DeepSeek-R1 style) — collapsible -->
+                            <div v-if="msg.role === 'assistant' && msg.reasoning" class="chatgpt-reasoning">
+                                <div class="chatgpt-reasoning-header" @click="toggleReasoning(msg.id ?? 0)">
+                                    <q-icon :name="expandedReasoning.has(msg.id ?? 0)
+                                        ? 'expand_less' : 'expand_more'" size="sm" class="q-mr-xs" />
+                                    <span class="text-caption text-weight-medium">
+                                        {{ expandedReasoning.has(msg.id ?? 0)
+                                            ? 'Hide reasoning' : 'Show reasoning' }}
+                                    </span>
+                                </div>
+                                <div v-if="expandedReasoning.has(msg.id ?? 0)" class="chatgpt-reasoning-body">
+                                    {{ msg.reasoning }}
+                                </div>
+                            </div>
                             <div v-if="msg.role === 'assistant'" class="chatgpt-markdown"
                                 v-html="renderMarkdown(msg.content || '_..._')" />
                             <div v-else class="chatgpt-text">
@@ -198,6 +212,17 @@ export default defineComponent({
         const showFullFacts = ref(false);
         const editingFactsInline = ref(false);
         const factsEditText = ref('');
+        const expandedReasoning = ref(new Set<number>());
+
+        function toggleReasoning(id: number) {
+            if (expandedReasoning.value.has(id)) {
+                expandedReasoning.value.delete(id);
+            } else {
+                expandedReasoning.value.add(id);
+            }
+            // Trigger reactivity
+            expandedReasoning.value = new Set(expandedReasoning.value);
+        }
 
         const settingsStore = useSettingsStore();
 
@@ -232,7 +257,9 @@ export default defineComponent({
                     const el = scrollRef.value;
                     if (el) {
                         const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-                        if (dist < 100 || store.isStreaming) {
+                        // Auto-scroll only if user is near the bottom (< 100px).
+                        // If user scrolled up to read earlier messages — stay put.
+                        if (dist < 100) {
                             el.scrollTop = el.scrollHeight;
                         }
                     }
@@ -247,6 +274,26 @@ export default defineComponent({
             }
             return false;
         });
+
+        // Auto-expand reasoning when it first appears for a message
+        watch(
+            () => store.messages.map((m) => ({ id: m.id, reasoning: m.reasoning })),
+            (newVal, oldVal) => {
+                if (!store.isStreaming) return;
+                newVal.forEach((cur) => {
+                    if (!cur.id || !cur.reasoning) return;
+                    const prev = oldVal?.find((o) => o.id === cur.id);
+                    // First time reasoning appears for this message → auto-expand
+                    if (!prev?.reasoning && cur.reasoning.length > 0) {
+                        if (!expandedReasoning.value.has(cur.id)) {
+                            expandedReasoning.value.add(cur.id);
+                            expandedReasoning.value = new Set(expandedReasoning.value);
+                        }
+                    }
+                });
+            },
+            { deep: true },
+        );
 
         function startEdit(msg: Message) {
             editingId.value = msg.id ?? null;
@@ -304,6 +351,8 @@ export default defineComponent({
             showFullFacts,
             editingFactsInline,
             factsEditText,
+            expandedReasoning,
+            toggleReasoning,
             startEditFactsInline,
             saveFactsInline,
         };

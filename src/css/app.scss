@@ -896,6 +896,52 @@ body.body--dark .chatgpt-facts-text-small {
   color: #d1d5db;
 }
 
+/* ---- Reasoning block (DeepSeek R1 / thinking models) ---- */
+.chatgpt-reasoning {
+  margin-bottom: 12px;
+}
+
+.chatgpt-reasoning-header {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.chatgpt-reasoning-header:hover {
+  color: #374151;
+}
+
+.chatgpt-reasoning-body {
+  background: #f3f4f6;
+  border-left: 3px solid #10a37f;
+  padding: 10px 14px;
+  margin-top: 6px;
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4b5563;
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Dark: reasoning block */
+body.body--dark .chatgpt-reasoning-header {
+  color: #9ca3af;
+}
+
+body.body--dark .chatgpt-reasoning-header:hover {
+  color: #d1d5db;
+}
+
+body.body--dark .chatgpt-reasoning-body {
+  background: #2a2b32;
+  color: #9ca3af;
+}
+
 /* ---- Voice input mic button ---- */
 .chatgpt-mic-btn--listening {
   animation: chatgpt-mic-pulse 1.2s ease-in-out infinite;
