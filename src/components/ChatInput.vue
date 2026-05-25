@@ -21,8 +21,8 @@
             <!-- Hidden file input -->
             <input ref="fileInputRef" type="file" multiple class="chatgpt-file-input-hidden"
                 @change="onFilesSelected" />
-            <q-input v-model="text" outlined dense autogrow placeholder="Message ChatGPT..."
-                :disable="store.isStreaming" class="chatgpt-input" @keydown.enter.exact="onEnterKey">
+            <q-input v-model="text" outlined dense autogrow placeholder="Message ChatGPT..." class="chatgpt-input"
+                @keydown.enter.exact="onEnterKey">
                 <template #prepend>
                     <q-btn flat dense round size="sm" icon="attach_file" :disable="store.isStreaming"
                         @click="openFilePicker">
@@ -36,8 +36,8 @@
                         @click="toggleListening">
                         <q-tooltip>{{ isListening ? 'Stop listening' : 'Voice input' }}</q-tooltip>
                     </q-btn>
-                    <q-btn v-if="store.isStreaming" flat dense round size="sm" icon="stop" color="black"
-                        @click="store.cancelStream()">
+                    <q-btn v-if="store.isStreaming || store.isSearching" flat dense round size="sm" icon="stop"
+                        color="black" @click="store.cancelStream()">
                         <q-tooltip>Stop</q-tooltip>
                     </q-btn>
                     <q-btn v-else flat dense round size="sm" icon="arrow_upward" color="black"
