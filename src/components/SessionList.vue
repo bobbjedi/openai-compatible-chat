@@ -101,9 +101,7 @@ import { useChatStore, type Session } from 'src/stores/chatStore';
 import { useSettingsStore } from 'src/stores/settingsStore';
 import SettingsDialog from 'src/components/SettingsDialog.vue';
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-var-requires, global-require, import/no-dynamic-require */
 const pkg = require('../../package.json');
-/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-var-requires, global-require, import/no-dynamic-require */
 
 export default defineComponent({
     name: 'SessionList',
