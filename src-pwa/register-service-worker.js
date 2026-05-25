@@ -28,7 +28,8 @@ register(process.env.SERVICE_WORKER_FILE, {
   },
 
   updated(/* registration */) {
-    // console.log('New content is available; please refresh.')
+    // New content available — activate immediately and reload
+    window.location.reload();
   },
 
   offline() {
