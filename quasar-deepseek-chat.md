@@ -10,7 +10,9 @@
 | API | Универсальный OpenAI-совместимый клиент (DeepSeek, OpenAI, любые прокси) |
 | Стриминг | SSE (Server-Sent Events) через `fetch` + `ReadableStream` |
 | Рендеринг | `marked` + `DOMPurify` |
-| Поиск | Tavily Search API |
+| Поиск | Tavily Search API (tool-call loop) |
+| Парсинг файлов | `FileReader.readAsText` — все текстовые форматы без библиотек |
+| Ввод | Голосовой ввод через Web Speech API |
 | Режим | SPA + PWA |
 
 ---
@@ -19,46 +21,48 @@
 
 ```
 openai-compatible-chat/
-├── quasar.conf.js                 # Конфигурация Quasar (Webpack, SPA + PWA)
-├── package.json                   # Зависимости и скрипты
-├── tsconfig.json                  # TypeScript-конфиг
+├── quasar.conf.js                    # Конфигурация Quasar (Webpack, SPA + PWA)
+├── package.json                      # Зависимости и скрипты
+├── tsconfig.json                     # TypeScript-конфиг
 ├── src/
-│   ├── App.vue                    # Корневой компонент (только <router-view>)
+│   ├── App.vue                       # Корневой компонент (только <router-view>)
 │   ├── layouts/
-│   │   └── MainLayout.vue         # Шапка + сайдбар (SessionList) + ChatSettingsDialog + User Facts
+│   │   └── MainLayout.vue            # Шапка + сайдбар + ChatSettings + User Facts
 │   ├── pages/
-│   │   ├── ChatPage.vue           # Страница чата (сообщения, markdown, reasoning, welcome)
-│   │   ├── Error404.vue           # 404 страница
-│   │   └── Index.vue              # Заглушка (scaffold)
+│   │   ├── ChatPage.vue              # Страница чата (markdown, reasoning, файлы, поиск)
+│   │   ├── Error404.vue              # 404 страница
+│   │   └── Index.vue                 # Заглушка (scaffold — можно удалить)
 │   ├── components/
-│   │   ├── ChatInput.vue          # Поле ввода + голосовой ввод (SpeechRecognition) + стоп
-│   │   ├── SessionList.vue        # Список сессий в сайдбаре + rename/delete
-│   │   ├── SettingsDialog.vue     # Настройки API: эндпоинт, ключ, модель, Tavily
-│   │   ├── ChatSettingsDialog.vue # Настройки чата: system prompt, auto-summary, загрузка из файла
-│   │   ├── CompositionComponent.vue  # Демо-компонент (scaffold)
-│   │   ├── EssentialLink.vue         # Демо-компонент (scaffold)
-│   │   └── models.ts                 # Демо-типы Todo/Meta (scaffold)
+│   │   ├── ChatInput.vue             # Поле ввода + 📎 файлы + 🎤 голос + стоп
+│   │   ├── SessionList.vue           # Список сессий + rename/delete + Settings
+│   │   ├── SettingsDialog.vue        # API: эндпоинт, ключ, модель, Tavily
+│   │   ├── ChatSettingsDialog.vue    # Чат: system prompt, auto-summary, загрузка .txt
+│   │   ├── CompositionComponent.vue  # Демо (scaffold — можно удалить)
+│   │   ├── EssentialLink.vue         # Демо (scaffold — можно удалить)
+│   │   └── models.ts                 # Демо-типы (scaffold — можно удалить)
 │   ├── stores/
-│   │   ├── chatStore.ts           # Pinia: сессии, сообщения, стриминг, summary, facts, tool-loop
-│   │   └── settingsStore.ts       # Pinia: endpoint, apiKey, model, search, darkMode
+│   │   ├── chatStore.ts              # Сессии, сообщения, стриминг, summary, facts, tool-loop
+│   │   └── settingsStore.ts          # endpoint, apiKey, model, search, darkMode
 │   ├── services/
-│   │   ├── llmProvider.ts         # Универсальный OpenAI-совместимый клиент (stream + non-stream)
-│   │   ├── db.ts                  # IndexedDB-обёртка (sessions, messages, settings)
-│   │   └── searchProvider.ts      # Tavily Search API-клиент
+│   │   ├── llmProvider.ts            # OpenAI-совместимый клиент (stream + non-stream)
+│   │   ├── db.ts                     # IndexedDB (sessions, messages, settings)
+│   │   ├── searchProvider.ts         # Tavily Search API-клиент
+│   │   └── fileParser.ts             # Парсер файлов (все текстовые форматы)
 │   ├── router/
-│   │   ├── index.ts               # Инициализация роутера
-│   │   └── routes.ts              # Маршруты (/ → ChatPage, 404)
+│   │   ├── index.ts                  # Инициализация роутера
+│   │   └── routes.ts                 # Маршруты (/ → ChatPage, 404)
 │   ├── boot/
-│   │   ├── pinia.ts               # Инициализация Pinia
-│   │   └── i18n.ts                # Инициализация vue-i18n
-│   ├── i18n/                      # Локализация (en-US)
+│   │   ├── pinia.ts                  # Инициализация Pinia
+│   │   └── i18n.ts                   # Инициализация vue-i18n
+│   ├── i18n/                         # Локализация (en-US)
 │   ├── css/
-│   │   ├── app.scss               # ChatGPT-стиль: светлая/тёмная тема (~980 строк)
-│   │   └── quasar.variables.scss  # Переменные Quasar
+│   │   ├── app.scss                  # ChatGPT-стиль: светлая/тёмная тема (~1000 строк)
+│   │   └── quasar.variables.scss     # Переменные Quasar
 │   └── assets/
-│       └── quasar-logo-vertical.svg
-├── src-pwa/                       # PWA: service worker, регистрация, манифест
-└── public/                        # Статика: favicon, иконки PWA
+├── src-pwa/                          # PWA: service worker, регистрация, манифест
+├── plans/                            # Планы и архитектурные заметки
+│   └── file-attachments.md
+└── public/                           # Статика: favicon, иконки PWA
 ```
 
 ---
@@ -76,7 +80,8 @@ ObjectStore: sessions
 ObjectStore: messages
   keyPath: id (autoIncrement)
   indexes: sessionId (string)
-  Поля: id?, sessionId, role, content, reasoning?, searchMeta?, createdAt
+  Поля: id?, sessionId, role (user|assistant|system|searchResult),
+        content, reasoning?, searchMeta?, attachments?, createdAt
 
 ObjectStore: settings
   keyPath: key (string)
@@ -91,6 +96,7 @@ ObjectStore: settings
 sequenceDiagram
     participant U as User
     participant CI as ChatInput.vue
+    participant FP as fileParser.ts
     participant CS as chatStore (Pinia)
     participant LP as llmProvider.ts
     participant API as API (DeepSeek/OpenAI/etc)
@@ -99,60 +105,71 @@ sequenceDiagram
     participant IDB as IndexedDB
     participant CP as ChatPage.vue
 
-    U->>CI: Вводит текст, жмёт Enter
-    CI->>CS: sendMessage(text)
-    CS->>CS: Авто-создание сессии если нет активной
-    CS->>CS: Авто-переименование «New Chat» → первые 50 символов
-    CS->>IDB: putMessage(userMsg)
-    CS->>CS: Добавляет user-сообщение в messages[]
+    U->>CI: Прикрепляет файлы 📎 + пишет текст
+    CI->>FP: parseFiles(files)
+    FP-->>CI: ParseResult[] (текст содержимого)
+    CI->>CS: sendMessage(text, parsedFiles)
+    CS->>CS: attachmentMetas[], filesContentText (для LLM)
+    CS->>IDB: putMessage(userMsg) — только метаданные, не содержимое
+    CS->>CS: user-сообщение в messages[] (чипы видны в UI)
     CS->>IDB: putMessage(empty assistantMsg)
-    CS->>CS: Добавляет пустое assistant-сообщение
     CS->>LP: streamChat(params, callbacks, signal)
     LP->>API: POST {endpoint}/chat/completions (stream: true)
     API-->>LP: SSE data chunks
     LP-->>CS: onChunk(delta), onReasoning(reasoning)
-    CS->>CS: Дописывает delta/reasoning в assistant-сообщение
+    CS->>CS: Дописывает delta/reasoning
     CS->>CP: Реактивно обновляет UI (markdown + reasoning)
-    LP-->>CS: onDone()
 
-    alt Обнаружен tool-call {"search":"..."}
+    alt Обнаружен tool-call {"search":"..."} (строгий JSON)
+        CS->>CS: Удаляет tool-call assistant из IDB и массива
         CS->>SP: searchWeb(query, tavilyKey)
         SP->>TAV: POST api.tavily.com/search
         TAV-->>SP: Результаты поиска
         SP-->>CS: formatted results
-        CS->>CS: Добавляет search-результат как user-сообщение
-        CS->>CS: Новый assistant, повторный цикл (до 3 раундов)
+        CS->>IDB: putMessage(searchResultMsg, role='searchResult')
+        CS->>CS: searchResult в messages[] (скрыт от UI)
+        CS->>CS: Новый assistant с searchMeta (🌐 баннер)
+        CS->>LP: streamChat (с search-результатами в контексте)
+        Note over CS,API: До 3 раундов tool-call loop
     end
 
     CS->>IDB: putMessage(assistantMsg)
     CS->>CS: maybeSummarize() — каждые 20 сообщений
-    CS->>LP: chat(summary prompt, non-stream)
-    LP->>API: POST (stream: false)
-    API-->>LP: summary text
+    CS->>LP: chat(summary prompt) + chat(facts prompt)
+    LP->>API: POST (stream: false) ×2
+    API-->>LP: summary text + facts list
     CS->>IDB: putSession(updated summary)
-    CS->>LP: chat(facts extraction prompt)
-    LP->>API: POST (stream: false)
-    API-->>LP: facts list
     CS->>IDB: putSetting(userFacts)
-    CS->>CP: factsNotification
+    CS->>CP: factsNotification баннер
 ```
+
+---
+
+## Роли сообщений
+
+| Роль | Назначение | Видно в UI |
+|------|-----------|------------|
+| `user` | Сообщения пользователя | ✅ |
+| `assistant` | Ответы модели | ✅ |
+| `system` | System prompt (не сохраняется в messages) | ❌ |
+| `searchResult` | Результаты поиска Tavily (только для LLM) | ❌ (скрыто) |
 
 ---
 
 ## API-клиент ([`llmProvider.ts`](src/services/llmProvider.ts))
 
 ### `streamChat(params, callbacks, signal?)`
-- URL: `{endpoint}/chat/completions` (гибкий эндпоинт, по умолчанию `https://api.deepseek.com/v1`)
+- URL: `{endpoint}/chat/completions`
 - Метод: POST
 - Заголовки: `Authorization: Bearer {apiKey}`, `Content-Type: application/json`
 - Тело: `{ model, messages, stream: true }`
-- Стриминг: `fetch` + `response.body.getReader()` + парсинг SSE (`data: {...}\n\n`)
-- Поддержка `reasoning_content` (DeepSeek-R1 и аналоги)
-- Поддержка `AbortController` (прерывание стрима)
+- Стриминг: `fetch` + `response.body.getReader()` + парсинг SSE
+- Поддержка `reasoning_content` (DeepSeek-R1)
+- Поддержка `AbortController` (прерывание)
 - Обработка `[DONE]`
 
 ### `chat(params, signal?)`
-- Нестриминговая версия (для авто-заголовков, summary, facts extraction)
+- Нестриминговая версия (summary, facts extraction)
 - Возвращает `string`
 
 ---
@@ -160,9 +177,71 @@ sequenceDiagram
 ## Search Provider ([`searchProvider.ts`](src/services/searchProvider.ts))
 
 - **Tavily Search API**: `POST https://api.tavily.com/search`
-- Функция `searchWeb(query, apiKey)` — выполняет поиск
-- Функция `formatSearchResults(response)` — форматирует в читаемый текст для LLM
+- `searchWeb(query, apiKey)` — выполняет поиск
+- `formatSearchResults(response)` — форматирует в текст для LLM
 - Параметры: `search_depth: basic`, `include_answer: true`, `max_results: 5`
+
+### Tool-call loop ([`chatStore.ts`](src/stores/chatStore.ts))
+
+1. Модель отвечает **строгим JSON** `{"search":"запрос"}` — без текста до/после
+2. `detectToolCall()` валидирует через `JSON.parse`
+3. Tool-call assistant **полностью удаляется** из IDB и массива
+4. Создаётся `searchResult` сообщение (роль `searchResult`, скрыто в UI)
+5. Создаётся новый assistant с `searchMeta` — отображается с 🌐 баннером
+6. Модель получает результаты поиска в контексте и отвечает
+7. Максимум 3 раунда
+
+### Обязательные триггеры поиска
+Ключевые слова: «новости», «news», «сейчас», «now», «сегодня», «today», «последние», «latest», «текущий год», «2025», «2026». Любой вопрос о погоде, датах, котировках, спорте, новостях.
+
+Запрещено выдумывать — модель обязана искать через `{"search":"..."}`.
+
+---
+
+## File Parser ([`fileParser.ts`](src/services/fileParser.ts))
+
+Читает **любой** файл как UTF-8 текст через `FileReader.readAsText()`. Без фильтрации по расширениям или MIME-типам.
+
+```typescript
+interface ParseResult {
+  name: string;   // transactions.html
+  text: string;   // содержимое файла
+  size: number;   // 1131
+}
+```
+
+### Поддерживаемые форматы
+Все текстовые: `txt`, `yaml`, `yml`, `md`, `json`, `xml`, `csv`, `tsv`, `toml`, `ini`, `env`, `html`, `css`, `js`, `ts`, `py`, `java`, `c`, `cpp`, `go`, `rs`, `rb`, `php`, `sql`, `sh`, и десятки других — любой файл читается как текст.
+
+### Как работает
+- **В UI:** чипы `📄 filename — 128 KB` в ChatInput и в user-сообщениях
+- **В IDB:** только метаданные (`name`, `type`, `size`), содержимое НЕ хранится
+- **В LLM:** содержимое вставляется в payload: `[Attached file: name]\n{content}\n\n---\nUser: {text}`
+
+---
+
+## ChatInput ([`ChatInput.vue`](src/components/ChatInput.vue))
+
+### Ввод
+- Поле с авто-расширением (autogrow)
+- **Десктоп:** Enter → отправка, Shift+Enter → перенос строки
+- **Телефон:** Enter → перенос строки, отправка по кнопке ▶
+- Определение мобильного через `navigator.userAgent`
+
+### Прикрепление файлов 📎
+- Скрытый `<input type="file" multiple>`
+- Чипы файлов над полем ввода (можно удалить)
+- Парсинг через [`fileParser.ts`](src/services/fileParser.ts) перед отправкой
+
+### Голосовой ввод 🎤
+- Web Speech API (SpeechRecognition)
+- Авто-определение языка (ru-RU / en-US)
+- Только финальные результаты добавляются в поле
+- Анимация пульсации при записи
+
+### Действия
+- Кнопка Stop при активном стриминге
+- Отключение ввода во время стриминга
 
 ---
 
@@ -186,20 +265,23 @@ sequenceDiagram
 
 ### Основные возможности
 - **Управление сессиями**: создание, выбор, переименование, удаление
-- **Отправка сообщений**: SSE-стриминг с прерыванием
-- **Token budget**: обрезка старых сообщений при превышении лимита
+- **Прикрепление файлов**: `sendMessage(text, parsedFiles?)` — метаданные в IDB, содержимое в LLM
+- **SSE-стриминг**: с прерыванием через AbortController
+- **Веб-поиск**: tool-call loop до 3 раундов, строгий JSON `{"search":"..."}`
+- **Token budget**: `buildTrimmedMessages()` — обрезка истории
 - **Rolling Summary**: авто-суммаризация каждые 20 сообщений
 - **User Facts**: авто-извлечение фактов о пользователе при summary
-- **Web Search Tool Loop**: до 3 раундов tool-calling с Tavily
-- **Редактирование сообщений**: переотправка с удалением последующих
+- **Редактирование сообщений**: `editMessage()` — переотправка с удалением последующих
 - **System Prompt**: настраиваемый для каждой сессии
 
 ### Ключевые функции
-- `sendMessage(text)` — отправка с авто-созданием сессии и tool-loop
+- `sendMessage(text, parsedFiles?)` — отправка с файлами и tool-loop
 - `editMessage(id, newText)` — редактирование и переотправка
 - `cancelStream()` — прерывание через AbortController
 - `maybeSummarize()` — авто-суммаризация + извлечение фактов
 - `buildTrimmedMessages()` — обрезка истории под token budget
+- `detectToolCall(text)` — поиск `{"search":"..."}` как чистого JSON
+- `searchSystemPrompt()` — промпт с правилами tool-calling
 
 ---
 
@@ -208,16 +290,18 @@ sequenceDiagram
 ### Рендеринг
 - Markdown через `marked` + `DOMPurify` (XSS-безопасность)
 - Reasoning-блоки (DeepSeek-R1): collapsible, авто-раскрытие при стриминге
+- 🌐 Search meta баннер на assistant-сообщениях: «погода Москва — 5 result(s)»
+- 📄 Чипы файлов в user-сообщениях
 - User Facts баннер с просмотром и inline-редактированием
 - Summary диалог (полноэкранный просмотр)
 - Индикаторы: спиннер при стриминге, «Searching the web...» при поиске
 
 ### Действия с сообщениями
 - Копирование текста (clipboard API)
-- Редактирование user-сообщений (Ctrl+Enter для отправки)
+- Редактирование user-сообщений (Ctrl+Enter)
 
 ### Welcome-экран
-- Показывается при отсутствии сообщений и не в режиме стриминга
+- Показывается при отсутствии сообщений
 
 ---
 
@@ -231,51 +315,41 @@ sequenceDiagram
 
 ---
 
-## ChatInput ([`ChatInput.vue`](src/components/ChatInput.vue))
-
-- Поле ввода с авто-расширением (autogrow)
-- Отправка по Enter
-- Голосовой ввод через Web Speech API (SpeechRecognition)
-  - Авто-определение языка (ru-RU / en-US) через `navigator.languages`
-  - Только финальные результаты добавляются в поле
-  - Анимация пульсации при записи
-- Кнопка Stop при активном стриминге
-- Отключение ввода во время стриминга
-
----
-
 ## Настройки API ([`SettingsDialog.vue`](src/components/SettingsDialog.vue))
 
-- API Endpoint (с автодополнением известных моделей)
+- API Endpoint
 - API Key (с переключением видимости)
 - Model (выпадающий список + ручной ввод: `deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner`)
 - Token Limit (1000–2 000 000)
-- Summary Model (отдельная модель для суммаризации)
+- Summary Model
 - Web Search: toggle + Tavily API Key
 
 ---
 
 ## Настройки чата ([`ChatSettingsDialog.vue`](src/components/ChatSettingsDialog.vue))
 
-- Auto Summary toggle (rolling summarization)
+- Auto Summary toggle
 - System Prompt (textarea, до 10 000 символов)
 - Загрузка system prompt из .txt файла
 
 ---
 
-## Дополнительные возможности (сверх изначального плана)
+## Полный список возможностей
 
-| Возможность | Файл/Компонент |
-|-------------|---------------|
-| Веб-поиск через Tavily | [`searchProvider.ts`](src/services/searchProvider.ts) + tool-loop в [`chatStore.ts`](src/stores/chatStore.ts) |
-| Rolling Summary (каждые 20 сообщений) | `maybeSummarize()` в [`chatStore.ts`](src/stores/chatStore.ts) |
-| User Facts (авто-извлечение знаний о пользователе) | `maybeSummarize()` → facts extraction в [`chatStore.ts`](src/stores/chatStore.ts) |
+| Возможность | Реализация |
+|-------------|-----------|
+| SSE-стриминг с reasoning | [`llmProvider.ts`](src/services/llmProvider.ts) |
+| Веб-поиск (Tavily) + tool-call loop | [`searchProvider.ts`](src/services/searchProvider.ts) + [`chatStore.ts`](src/stores/chatStore.ts) |
+| Прикрепление файлов (все текстовые форматы) | [`fileParser.ts`](src/services/fileParser.ts) + [`ChatInput.vue`](src/components/ChatInput.vue) |
 | Голосовой ввод (SpeechRecognition) | [`ChatInput.vue`](src/components/ChatInput.vue) |
-| Тёмная тема | `settingsStore.toggleDarkMode()` + [`app.scss`](src/css/app.scss) |
-| Редактирование сообщений | `editMessage()` в [`chatStore.ts`](src/stores/chatStore.ts) |
-| Token budget management | `buildTrimmedMessages()` в [`chatStore.ts`](src/stores/chatStore.ts) |
-| Reasoning display (R1) | Collapsible блоки в [`ChatPage.vue`](src/pages/ChatPage.vue) |
-| PWA поддержка | `src-pwa/` + конфиг в [`quasar.conf.js`](quasar.conf.js) |
+| Rolling Summary (каждые 20 сообщений) | [`chatStore.ts`](src/stores/chatStore.ts) → `maybeSummarize()` |
+| User Facts (авто-извлечение) | [`chatStore.ts`](src/stores/chatStore.ts) → facts extraction |
+| Тёмная тема | [`settingsStore.ts`](src/stores/settingsStore.ts) + [`app.scss`](src/css/app.scss) |
+| Редактирование сообщений | [`chatStore.ts`](src/stores/chatStore.ts) → `editMessage()` |
+| Token budget management | [`chatStore.ts`](src/stores/chatStore.ts) → `buildTrimmedMessages()` |
+| Reasoning display (R1) | [`ChatPage.vue`](src/pages/ChatPage.vue) — collapsible |
+| Адаптивный Enter (десктоп/телефон) | [`ChatInput.vue`](src/components/ChatInput.vue) → `onEnterKey()` |
+| PWA поддержка | `src-pwa/` + [`quasar.conf.js`](quasar.conf.js) |
 | i18n (базовая) | `src/i18n/` |
 
 ---
@@ -299,22 +373,21 @@ sequenceDiagram
 
 ## Конфигурация Quasar ([`quasar.conf.js`](quasar.conf.js))
 
-- **Тип**: SPA (с PWA-конфигом)
+- **Тип**: SPA (с PWA)
 - **Роутер**: hash mode
 - **Public Path**: `/openai-compatible-chat/`
-- **Dev-сервер**: порт 8080, авто-открытие браузера
-- **Boot-файлы**: `i18n`, `pinia`
-- **Плагины Quasar**: `Dark` (тёмная тема)
-- **PWA**: Workbox GenerateSW, skipWaiting, clientsClaim
-- **PWA Manifest**: имя «OpenAI-Compatible Chat», тема `#10a37f`
+- **Dev-сервер**: порт 8080
+- **Boot**: `i18n`, `pinia`
+- **Плагины**: `Dark`
+- **PWA**: Workbox GenerateSW
 
 ---
 
-## Файлы, требующие удаления (scaffold/мусор)
+## Файлы для удаления (scaffold)
 
 | Файл | Причина |
 |------|---------|
-| [`src/components/CompositionComponent.vue`](src/components/CompositionComponent.vue) | Демо-компонент Quasar scaffold |
-| [`src/components/EssentialLink.vue`](src/components/EssentialLink.vue) | Демо-компонент Quasar scaffold |
-| [`src/components/models.ts`](src/components/models.ts) | Демо-типы (Todo, Meta), не используются |
-| [`src/pages/Index.vue`](src/pages/Index.vue) | Заглушка, не используется в роутах |
+| [`src/components/CompositionComponent.vue`](src/components/CompositionComponent.vue) | Демо Quasar scaffold |
+| [`src/components/EssentialLink.vue`](src/components/EssentialLink.vue) | Демо Quasar scaffold |
+| [`src/components/models.ts`](src/components/models.ts) | Демо-типы (не используются) |
+| [`src/pages/Index.vue`](src/pages/Index.vue) | Заглушка (не в роутах) |

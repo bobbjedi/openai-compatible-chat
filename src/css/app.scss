@@ -169,6 +169,9 @@ body.body--dark .chatgpt-sidebar-footer .q-icon {
 .chatgpt-session-title {
   font-size: 13px !important;
   color: #1f1f1f !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chatgpt-session-more {
