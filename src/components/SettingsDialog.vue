@@ -64,6 +64,10 @@
 
         <q-separator spaced />
 
+        <SyncSettings />
+
+        <q-separator spaced />
+
         <div class="text-subtitle2 text-grey-8 q-mb-sm">Web Search (Tavily)</div>
         <q-toggle v-model="localSearchEnabled" dense label="Enable web search"
           hint="Model can search the internet when needed" />
@@ -89,6 +93,7 @@ import {
   defineComponent, ref, computed, watch,
 } from 'vue';
 import { useSettingsStore } from 'src/stores/settingsStore';
+import SyncSettings from './SyncSettings.vue';
 
 const KNOWN_MODELS = [
   'deepseek-v4-flash',
@@ -99,6 +104,7 @@ const KNOWN_MODELS = [
 
 export default defineComponent({
   name: 'SettingsDialog',
+  components: { SyncSettings },
   props: {
     modelValue: { type: Boolean, default: false },
   },

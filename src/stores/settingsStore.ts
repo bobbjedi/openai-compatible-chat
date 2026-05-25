@@ -52,6 +52,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const visionEnabled = ref(false);
   const visionModel = ref('deepseek-chat');
   const darkMode = ref(loadDarkMode());
+  const googleDriveEnabled = ref(false);
+  const googleDriveEmail = ref('');
 
   // Apply theme immediately on store init
   Dark.set(darkMode.value);
@@ -60,7 +62,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function load() {
     if (loaded) return;
-    const [ep, key, mdl, smdl, tkl, facts, srchKey, srchEnb, vEnb, vMdl] = await Promise.all([
+    const [
+      ep, key, mdl, smdl, tkl, facts,
+      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail,
+    ] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
       getSetting('model'),
@@ -71,6 +76,8 @@ export const useSettingsStore = defineStore('settings', () => {
       getSetting('searchEnabled'),
       getSetting('visionEnabled'),
       getSetting('visionModel'),
+      getSetting('googleDriveEnabled'),
+      getSetting('googleDriveEmail'),
     ]);
     if (ep) endpoint.value = ep;
     if (key) apiKey.value = key;
@@ -81,6 +88,8 @@ export const useSettingsStore = defineStore('settings', () => {
     if (srchEnb) searchEnabled.value = srchEnb === 'true';
     if (vEnb) visionEnabled.value = vEnb === 'true';
     if (vMdl) visionModel.value = vMdl;
+    if (gdEnb) googleDriveEnabled.value = gdEnb === 'true';
+    if (gdEmail) googleDriveEmail.value = gdEmail;
     userFacts.value = deserializeFacts(facts);
     loaded = true;
   }
@@ -150,6 +159,16 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('visionModel', val);
   }
 
+  async function saveGoogleDriveEnabled(val: boolean) {
+    googleDriveEnabled.value = val;
+    await putSetting('googleDriveEnabled', String(val));
+  }
+
+  async function saveGoogleDriveEmail(val: string) {
+    googleDriveEmail.value = val;
+    await putSetting('googleDriveEmail', val);
+  }
+
   function toggleDarkMode() {
     darkMode.value = !darkMode.value;
     Dark.set(darkMode.value);
@@ -168,6 +187,8 @@ export const useSettingsStore = defineStore('settings', () => {
     visionEnabled,
     visionModel,
     darkMode,
+    googleDriveEnabled,
+    googleDriveEmail,
     load,
     saveEndpoint,
     saveApiKey,
@@ -179,6 +200,8 @@ export const useSettingsStore = defineStore('settings', () => {
     saveSearchEnabled,
     saveVisionEnabled,
     saveVisionModel,
+    saveGoogleDriveEnabled,
+    saveGoogleDriveEmail,
     addFact,
     removeFact,
     toggleDarkMode,

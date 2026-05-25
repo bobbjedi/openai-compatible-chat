@@ -47,7 +47,7 @@
             </div>
         </q-scroll-area>
 
-        <!-- Bottom bar: Settings + Dark Mode -->
+        <!-- Bottom bar: Settings + Dark Mode + Sync status -->
         <div class="chatgpt-sidebar-footer">
             <q-list dense>
                 <q-item clickable v-ripple @click="showSettings = true">
@@ -63,6 +63,15 @@
                     </q-item-section>
                     <q-item-section>
                         {{ settingsStore.darkMode ? 'Light Mode' : 'Dark Mode' }}
+                    </q-item-section>
+                </q-item>
+                <!-- Sync status indicator -->
+                <q-item v-if="syncState.isSignedIn.value" dense class="chatgpt-sync-status">
+                    <q-item-section avatar>
+                        <q-icon :name="syncIcon" :color="syncColor" size="xs" />
+                    </q-item-section>
+                    <q-item-section class="text-caption">
+                        {{ syncLabel }}
                     </q-item-section>
                 </q-item>
             </q-list>
@@ -96,9 +105,10 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue';
+import { defineComponent, ref, computed } from 'vue';
 import { useChatStore, type Session } from 'src/stores/chatStore';
 import { useSettingsStore } from 'src/stores/settingsStore';
+import { syncState } from 'src/services/syncService';
 import SettingsDialog from 'src/components/SettingsDialog.vue';
 
 const pkg = require('../../package.json');
@@ -116,6 +126,33 @@ export default defineComponent({
         const showSettings = ref(false);
 
         const appVersion: string = pkg.version;
+
+        // Sync status indicators
+        const syncIcon = computed(() => {
+            if (syncState.isSyncing.value) return 'cloud_sync';
+            if (syncState.lastSyncAt.value) return 'cloud_done';
+            return 'cloud';
+        });
+
+        const syncColor = computed(() => {
+            if (syncState.isSyncing.value) return 'primary';
+            if (syncState.syncError.value) return 'negative';
+            if (syncState.lastSyncAt.value) return 'positive';
+            return 'grey';
+        });
+
+        const syncLabel = computed(() => {
+            if (syncState.isSyncing.value) return 'Syncing...';
+            if (syncState.syncError.value) return 'Sync error';
+            if (syncState.lastSyncAt.value) {
+                const diff = Date.now() - syncState.lastSyncAt.value;
+                if (diff < 60000) return 'Synced just now';
+                if (diff < 3600000) return `Synced ${Math.floor(diff / 60000)}m ago`;
+                if (diff < 86400000) return `Synced ${Math.floor(diff / 3600000)}h ago`;
+                return 'Synced';
+            }
+            return 'Not synced';
+        });
 
         function truncate(str: string, maxLen: number): string {
             if (str.length <= maxLen) return str;
@@ -151,10 +188,14 @@ export default defineComponent({
         return {
             store,
             settingsStore,
+            syncState,
             renameDialog,
             renameTitle,
             showSettings,
             appVersion,
+            syncIcon,
+            syncColor,
+            syncLabel,
             truncate,
             startRename,
             confirmRename,

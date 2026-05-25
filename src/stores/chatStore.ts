@@ -14,6 +14,7 @@ import {
 import { streamChat, chat, type LlmMessage } from 'src/services/llmProvider';
 import { searchWeb, formatSearchResults } from 'src/services/searchProvider';
 import { type ParseResult } from 'src/services/fileParser';
+import { syncService } from 'src/services/syncService';
 import { useSettingsStore } from './settingsStore';
 
 export { type Message, type Session };
@@ -218,6 +219,7 @@ After you respond with the JSON, you will receive search results. Then give the 
     session.title = title;
     session.updatedAt = Date.now();
     await putSession({ ...toRaw(session) });
+    syncService.enqueueSync(id);
   }
 
   async function updateSystemPrompt(prompt: string | undefined) {
@@ -228,11 +230,16 @@ After you respond with the JSON, you will receive search results. Then give the 
     session.systemPrompt = prompt;
     session.updatedAt = Date.now();
     await putSession({ ...toRaw(session) });
+    if (currentSessionId.value) {
+      syncService.enqueueSync(currentSessionId.value);
+    }
   }
 
   async function removeSession(id: string) {
     await deleteSession(id);
     sessions.value = sessions.value.filter((s) => s.id !== id);
+    // Delete from Drive
+    void syncService.deleteSessionFile(id);
     if (currentSessionId.value === id) {
       // If there are other sessions — switch to the first one
       if (sessions.value.length > 0) {
@@ -326,6 +333,11 @@ Write an updated summary of the entire conversation (preserve key information fr
 
         // eslint-disable-next-line no-console
         console.log('[maybeSummarize] Summary updated, length:', newSummary.length);
+
+        // Sync after summary update
+        if (currentSessionId.value) {
+          syncService.enqueueSync(currentSessionId.value);
+        }
       }
 
       // --- Extract / update User Facts ---
@@ -401,6 +413,11 @@ ${dialogueText}`;
             const hasChanges = prevJson !== newJson;
 
             await settings.saveUserFacts(parsedFacts);
+
+            // Sync user facts after update
+            if (currentSessionId.value) {
+              syncService.enqueueSync(currentSessionId.value);
+            }
 
             // eslint-disable-next-line no-console
             console.log('[maybeSummarize] User Facts updated, count:', parsedFacts.length,
@@ -767,6 +784,9 @@ ${dialogueText}`;
 
     // 4. Stream with tool loop — pass matched model
     await streamWithToolLoop(settings, sid, llmMessages, idx, streamModel);
+
+    // Sync after message is sent
+    syncService.enqueueSync(sid);
   }
 
   function cancelStream() {
@@ -847,6 +867,9 @@ ${dialogueText}`;
     // Stream with tool loop
     const editAidx = messages.value.findIndex((m) => m.id === assistantId);
     await streamWithToolLoop(settings, sid, llmMessages, editAidx);
+
+    // Sync after edit
+    syncService.enqueueSync(sid);
   }
 
   // --- Initialization ---
