@@ -1,6 +1,6 @@
 <template>
   <q-dialog v-model="visible" persistent>
-    <q-card class="chatgpt-dialog" style="min-width: 440px">
+    <q-card class="chatgpt-dialog" style="min-width: 340px; max-width: 95vw">
       <q-card-section class="row items-center q-pb-none">
         <div class="text-h6">Settings</div>
         <q-space />
