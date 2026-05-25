@@ -143,7 +143,14 @@ export const useChatStore = defineStore('chat', () => {
    * Build system prompt extension with search tool instruction.
    */
   function searchSystemPrompt(): string {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const todayRu = now.toLocaleDateString('ru-RU', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
     return `[WEB SEARCH TOOL — MANDATORY RULES]
+
+Current date: ${today} (${todayRu}).
 
 You have access to a web search tool. When you need up-to-date information, respond with ONLY a JSON object (no other text):
 {"search":"your search query here"}
@@ -151,10 +158,14 @@ You have access to a web search tool. When you need up-to-date information, resp
 CRITICAL RULES:
 1. Your response MUST be ONLY valid JSON — not a single character before or after the braces.
 2. MANDATORY search triggers (you MUST search, no exceptions):
-   - Keywords: «новости», «news», «сейчас», «now», «сегодня», «today», «последние», «latest», «текущий год», «2025», «2026»
+   - Keywords: «новости», «news», «сейчас», «now», «сегодня», «today», «последние», «latest»
    - Any question about the current date, weather, stock prices, sports scores, recent events
    - ANY question requiring real-world facts you cannot know from training data
-3. FORBIDDEN:
+3. SEARCH QUERY FORMAT:
+   - ALWAYS include the current year (${now.getFullYear()}) in search queries for recent/current information
+   - Example: «новости» → {"search":"новости ${now.getFullYear()}"}
+   - Example: «погода» → {"search":"погода Москва ${today}"}
+4. FORBIDDEN:
    - NEVER invent weather, news, prices, dates, or any real-time data
    - NEVER guess «tomorrow's weather» or «today's news» — search instead
    - If unsure whether data is current → search
