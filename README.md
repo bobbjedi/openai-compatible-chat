@@ -1,6 +1,6 @@
 # openai-compatible-chat
 
-> ChatGPT-like SPA built with Quasar/Vue 3. Works with DeepSeek, OpenAI, and any API supporting chat/completions. Features voice input, rolling summaries, and user facts.
+> Web-only ChatGPT-like SPA built with Quasar/Vue 3. Works with DeepSeek, OpenAI, and any API supporting chat/completions. All data is stored **exclusively in your browser** (IndexedDB) — no backend, no server, no cloud sync.
 
 [![Quasar](https://img.shields.io/badge/Quasar-2.14-1976D2?logo=quasar)](https://quasar.dev/)
 [![Vue](https://img.shields.io/badge/Vue-3.x-4FC08D?logo=vue.js)](https://vuejs.org/)
@@ -14,6 +14,8 @@
 
 - **SSE streaming** — real-time token-by-token responses via OpenAI-compatible `/chat/completions` endpoint
 - **Voice input** — Web Speech API with automatic language detection (multilingual)
+- **File attachments** — attach any text file (code, logs, configs) or images (PNG/JPEG/GIF/WebP) with Vision API support
+- **Web search** — Tavily Search API integration with automatic tool-call loop (up to 3 rounds)
 - **Rolling summary** — automatic periodic summarization to preserve context in long conversations
 - **User Facts** — LLM-extracted knowledge base about the user, persistent across sessions
 - **System prompt** — per-chat instructions with file import support (`.txt`)
@@ -24,6 +26,7 @@
 - **Context trimming** — token-aware message pruning to fit within configurable limits (up to 2M tokens)
 - **ChatGPT-style UI** — pill-shaped input, collapsible sidebar, session rename/delete, copy-to-clipboard
 - **Multi-model support** — select from preset DeepSeek models or enter any custom model name
+- **PWA ready** — installable as a standalone app with generated icons
 
 ---
 
@@ -39,6 +42,8 @@
 | Markdown | marked 11 + DOMPurify |
 | Styling | Sass (SCSS) |
 | Routing | Vue Router 4 |
+| Icons | Material Icons |
+| PWA icons | sharp (SVG → PNG) |
 
 ---
 
@@ -75,6 +80,10 @@ Click **Settings** (gear icon in the sidebar footer) to configure:
 | Model | `deepseek-chat` | Model name (preset or custom) |
 | Summary Model | `deepseek-chat` | Model used for generating summaries |
 | Token Limit | 200 000 | Max context tokens (1000–2 000 000) |
+| Vision Enabled | off | Enable image attachments for Vision API |
+| Vision Model | `deepseek-chat` | Model used for image recognition |
+| Web Search | off | Enable Tavily web search |
+| Tavily API Key | *(empty)* | API key from [tavily.com](https://tavily.com) |
 
 All settings are persisted in **IndexedDB** and survive page reloads.
 
@@ -92,6 +101,16 @@ Click the microphone button in the input field to dictate text. Uses Web Speech 
 
 First locale starting with `ru` → Russian, otherwise English. Button pulses red while recording.
 
+### File Attachments & Vision
+
+Click the **📎** button to attach files. All text-based files are read as UTF-8 and sent to the LLM as context. Images (PNG, JPEG, GIF, WebP) are converted to base64 data URLs and sent via the Vision API when enabled.
+
+File chips appear above the input field — removable before sending. In messages, files are shown as compact chips with type icons and sizes.
+
+### Web Search (Tavily)
+
+When enabled, the model can search the web for up-to-date information. The model responds with a strict JSON tool call `{"search":"query"}`, which triggers a Tavily API search. Results are injected into the context, and the model produces a final answer. Up to 3 search rounds per message.
+
 ### Rolling Summary (`maybeSummarize`)
 
 Triggered every **20** user/assistant messages. The LLM receives the previous summary + last 20 messages and produces an updated summary (≤500 words). The summary is injected as a system message into subsequent requests, preserving context without growing token usage.
@@ -100,7 +119,7 @@ Toggle per chat in **Chat Settings** (gear icon in header, then **Auto Summary**
 
 ### User Facts
 
-During each summarization, the LLM also extracts facts about the user (preferences, projects, technologies, etc.). Facts are merged into a **global knowledge base** that persists across all chat sessions. A yellow banner notifies when new facts are discovered → **Review** opens the facts editor.
+During each summarization, the LLM also extracts facts about the user (preferences, projects, technologies, etc.). Facts are merged into a **global knowledge base** that persists across all chat sessions. A yellow banner notifies when new facts are discovered → **Show** opens the facts editor.
 
 Manage facts manually via the **User Facts** button in the header.
 
@@ -115,25 +134,27 @@ Open **Chat Settings** (gear icon in header) to set a per-chat system prompt. Th
 ```
 src/
 ├── components/
-│   ├── ChatInput.vue            # Message input + voice button
-│   ├── SessionList.vue          # Sidebar session list
-│   ├── SettingsDialog.vue       # Global API settings dialog
+│   ├── ChatInput.vue            # Message input + voice + file attachments
+│   ├── SessionList.vue          # Sidebar session list + settings
+│   ├── SettingsDialog.vue       # Global API settings (model, vision, search)
 │   └── ChatSettingsDialog.vue   # Per-chat settings (system prompt, auto summary)
 ├── css/
-│   └── app.scss                 # Global styles (light + dark themes)
+│   └── app.scss                 # Global styles (light + dark themes, ~1070 lines)
 ├── layouts/
 │   └── MainLayout.vue           # Root layout (header, sidebar, dialogs)
 ├── pages/
-│   └── ChatPage.vue             # Main chat page (messages, streaming, editing)
+│   └── ChatPage.vue             # Main chat page (messages, streaming, editing, facts)
 ├── services/
 │   ├── db.ts                    # IndexedDB layer (sessions, messages, settings)
-│   └── llmProvider.ts           # OpenAI-compatible SSE streaming client
+│   ├── llmProvider.ts           # OpenAI-compatible SSE streaming client (supports image_url)
+│   ├── searchProvider.ts        # Tavily Search API client
+│   └── fileParser.ts            # File parser (text + image base64)
 └── stores/
-    ├── chatStore.ts             # Chat state (sessions, messages, streaming, summary, facts)
-    └── settingsStore.ts         # Settings (endpoint, apiKey, model, theme, userFacts)
+    ├── chatStore.ts             # Chat state (sessions, messages, streaming, summary, facts, tool-loop)
+    └── settingsStore.ts         # Settings (endpoint, apiKey, model, vision, search, theme)
 ```
 
-Full technical documentation: [`chat-project-docs.md`](chat-project-docs.md)
+Full technical documentation: [`quasar-deepseek-chat.md`](quasar-deepseek-chat.md)
 
 ---
 
@@ -144,7 +165,10 @@ yarn              # Install dependencies
 npx quasar dev    # Development server (hot reload)
 npx quasar build  # Production build (SPA)
 yarn lint         # Run ESLint
+yarn generate-icons  # Regenerate PWA icons from favicon.svg
 ```
+
+---
 
 ## License
 
