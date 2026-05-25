@@ -118,6 +118,15 @@ export async function deleteMessage(id: number): Promise<void> {
   await db.delete('messages', id);
 }
 
+export async function deleteMessagesBySession(sessionId: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('messages', 'readwrite');
+  const index = tx.store.index('sessionId');
+  const keys = await index.getAllKeys(sessionId);
+  await Promise.all(keys.map((key) => tx.store.delete(key)));
+  await tx.done;
+}
+
 // --- Settings ---
 
 export async function getSetting(key: string): Promise<string | undefined> {

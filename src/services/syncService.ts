@@ -13,6 +13,7 @@ import {
   type DriveUserFacts,
 } from './googleDriveProvider';
 import type { Session, Message } from './db';
+import { putSession, putMessage, deleteMessagesBySession } from './db';
 
 // --- Состояние синхронизации ---
 
@@ -253,7 +254,24 @@ export const syncService = {
         }),
       );
 
-      // Apply merged messages to store
+      // Save merged sessions to IndexedDB
+      await Promise.all(
+        mergedSessions.map((s) => putSession({ ...s })),
+      );
+
+      // Save merged messages to IndexedDB
+      await Promise.all(
+        messagesResults.map(async ({ sessionId, messages }) => {
+          // Delete old messages for this session first
+          await deleteMessagesBySession(sessionId);
+          // Then save merged messages
+          await Promise.all(
+            messages.map((m) => putMessage({ ...m })),
+          );
+        }),
+      );
+
+      // Apply merged messages to store (UI)
       messagesResults.forEach(({ sessionId, messages }) => {
         setMessages(sessionId, messages);
       });
@@ -264,7 +282,7 @@ export const syncService = {
         setUserFacts(driveFacts.facts);
       }
 
-      // Apply merged sessions
+      // Apply merged sessions (UI)
       setSessions(mergedSessions);
 
       const totalMessages = messagesResults.reduce(
