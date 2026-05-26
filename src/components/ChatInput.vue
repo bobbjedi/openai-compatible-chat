@@ -115,6 +115,7 @@ export default defineComponent({
 
         /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
         let recognition: any = null;
+        let lastTranscript = ''; // для дедупликации
 
         function initRecognition() {
             if (!SpeechRecognitionAPI) return;
@@ -128,15 +129,25 @@ export default defineComponent({
             recognition.lang = isRu ? 'ru-RU' : 'en-US';
 
             recognition.onresult = (event: any) => {
-                // Берем только последний финальный результат
-                const lastResult = event.results[event.results.length - 1];
-                if (lastResult?.isFinal) {
-                    const { transcript } = lastResult[0];
-                    text.value = text.value.trim()
-                        ? `${text.value.trim()} ${transcript}`
-                        : transcript;
+                // Собираем все финальные результаты, которых ещё не было
+                let newText = '';
+                for (let i = event.resultIndex; i < event.results.length; i += 1) {
+                    const result = event.results[i];
+                    if (result.isFinal) {
+                        const transcript = result[0].transcript.trim();
+                        // Дедупликация: добавляем только если это новый текст
+                        if (transcript && transcript !== lastTranscript) {
+                            newText += transcript;
+                            lastTranscript = transcript;
+                        }
+                    }
                 }
-                // Промежуточные результаты игнорируем полностью
+
+                if (newText) {
+                    text.value = text.value.trim()
+                        ? `${text.value.trim()} ${newText}`
+                        : newText;
+                }
             };
 
             recognition.onerror = (event: any) => {
