@@ -75,26 +75,14 @@ export const useChatStore = defineStore('chat', () => {
       tokenBudget += estimateTokens(summary) + 16;
     }
 
-    // Helper to format timestamp for LLM context
-    function formatMsgTime(ts: number): string {
-      const d = new Date(ts);
-      const now = new Date();
-      const isToday = d.toDateString() === now.toDateString();
-      const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-      if (isToday) return `[${time}]`;
-      const date = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-      return `[${date} ${time}]`;
-    }
-
     // Collect user/assistant/searchResult from the end, until we exceed the limit.
     // searchResult messages are mapped to 'user' role for the LLM API.
     const eligible: { role: 'user' | 'assistant'; content: string }[] = [];
     messagesArr.forEach((m) => {
-      const timePrefix = m.createdAt ? formatMsgTime(m.createdAt) : '';
       if (m.role === 'searchResult') {
         eligible.push({ role: 'user', content: m.content });
       } else if (m.role === 'user' || (m.role === 'assistant' && m.content !== '')) {
-        eligible.push({ role: m.role, content: `${timePrefix} ${m.content}` });
+        eligible.push({ role: m.role, content: m.content });
       }
     });
 
@@ -524,6 +512,8 @@ ${dialogueText}`;
             onDone() {
               // Check if the response is a tool call
               const text = messages.value[assistantIdx]?.content || '';
+              // eslint-disable-next-line no-console
+              // console.log('[LLM Response]', text);
               const tool = detectToolCall(text);
 
               if (tool) {
@@ -806,6 +796,13 @@ ${dialogueText}`;
 
     // 4. Stream with tool loop — pass matched model
     await streamWithToolLoop(settings, sid, llmMessages, idx, streamModel);
+
+    // Log final assistant response
+    const lastMsg = messages.value.length > 0 ? messages.value[messages.value.length - 1] : null;
+    if (lastMsg && lastMsg.role === 'assistant') {
+      // eslint-disable-next-line no-console
+      // console.log('[LLM Final]', lastMsg.content);
+    }
 
     // Sync after message is sent
     syncService.enqueueSync(sid);

@@ -55,6 +55,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const googleDriveEnabled = ref(false);
   const googleDriveEmail = ref('');
   const ttsRate = ref(1.0);
+  const voiceSilenceDelay = ref(1500);
 
   // Apply theme immediately on store init
   Dark.set(darkMode.value);
@@ -65,7 +66,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (loaded) return;
     const [
       ep, key, mdl, smdl, tkl, facts,
-      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail, tts,
+      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail, tts, vsDel,
     ] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
@@ -80,6 +81,7 @@ export const useSettingsStore = defineStore('settings', () => {
       getSetting('googleDriveEnabled'),
       getSetting('googleDriveEmail'),
       getSetting('ttsRate'),
+      getSetting('voiceSilenceDelay'),
     ]);
     if (ep) endpoint.value = ep;
     if (key) apiKey.value = key;
@@ -93,6 +95,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (gdEnb) googleDriveEnabled.value = gdEnb === 'true';
     if (gdEmail) googleDriveEmail.value = gdEmail;
     if (tts) ttsRate.value = parseFloat(tts) || 1.0;
+    if (vsDel) voiceSilenceDelay.value = parseInt(vsDel, 10) || 1500;
     userFacts.value = deserializeFacts(facts);
     loaded = true;
   }
@@ -177,6 +180,11 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('ttsRate', String(val));
   }
 
+  async function saveVoiceSilenceDelay(val: number) {
+    voiceSilenceDelay.value = val;
+    await putSetting('voiceSilenceDelay', String(val));
+  }
+
   function toggleDarkMode() {
     darkMode.value = !darkMode.value;
     Dark.set(darkMode.value);
@@ -198,6 +206,7 @@ export const useSettingsStore = defineStore('settings', () => {
     googleDriveEnabled,
     googleDriveEmail,
     ttsRate,
+    voiceSilenceDelay,
     load,
     saveEndpoint,
     saveApiKey,
@@ -212,6 +221,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveGoogleDriveEnabled,
     saveGoogleDriveEmail,
     saveTtsRate,
+    saveVoiceSilenceDelay,
     addFact,
     removeFact,
     toggleDarkMode,

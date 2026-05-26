@@ -12,7 +12,7 @@
           <q-menu v-if="isSpeaking" anchor="bottom end" self="top end" auto-close>
             <q-list dense style="min-width: 200px">
               <q-item-label header class="text-caption text-grey-7">Speed: {{ Math.round(settingsStore.ttsRate * 100)
-                }}%</q-item-label>
+              }}%</q-item-label>
               <q-item>
                 <q-item-section>
                   <div class="row items-center q-gutter-xs">
@@ -32,6 +32,10 @@
               </q-item>
             </q-list>
           </q-menu>
+        </q-btn>
+        <q-btn flat dense round :icon="voiceState.isActive.value ? 'mic' : 'mic_none'"
+          :color="voiceState.isActive.value ? 'negative' : ''" @click="toggleVoiceMode">
+          <q-tooltip>{{ voiceState.isActive.value ? 'Voice Mode Active' : 'Voice Mode' }}</q-tooltip>
         </q-btn>
         <q-btn flat dense round icon="fact_check" @click="showFactsDialog = true">
           <q-tooltip>User Facts</q-tooltip>
@@ -74,6 +78,9 @@
         </div>
       </div>
     </transition>
+
+    <!-- Voice Mode Overlay -->
+    <VoiceModeOverlay />
 
     <ChatSettingsDialog v-model="showChatSettings" />
 
@@ -143,14 +150,20 @@ import {
 } from 'vue';
 import SessionList from 'src/components/SessionList.vue';
 import ChatSettingsDialog from 'src/components/ChatSettingsDialog.vue';
+import VoiceModeOverlay from 'src/components/VoiceModeOverlay.vue';
 import { useSettingsStore } from 'src/stores/settingsStore';
 import { useChatStore } from 'src/stores/chatStore';
 import { syncState } from 'src/services/syncService';
+import { voiceState, voiceModeService } from 'src/services/voiceModeService';
+import { sanitizeForTts } from 'src/services/ttsSanitizer';
 
 export default defineComponent({
   name: 'MainLayout',
-  components: { SessionList, ChatSettingsDialog },
+  components: {
+    SessionList, ChatSettingsDialog, VoiceModeOverlay,
+  },
   setup() {
+    const chatStore = useChatStore();
     const leftDrawerOpen = ref(false);
     const showChatSettings = ref(false);
     const showFactsDialog = ref(false);
@@ -160,6 +173,64 @@ export default defineComponent({
     const settingsStore = useSettingsStore();
 
     const syncNotification = ref<{ text: string; icon: string; type: string } | null>(null);
+
+    // Watch reasoning updates → show in Voice Mode overlay
+    watch(() => {
+      const msgs = chatStore.messages;
+      const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+      return lastAssistant?.reasoning || '';
+    }, (reasoning) => {
+      if (voiceState.isActive.value && reasoning) {
+        voiceModeService.setReasoning(reasoning);
+      }
+    });
+
+    // Watch for streaming end → speak response in Voice Mode
+    watch(() => chatStore.isStreaming, (streaming) => {
+      if (!streaming && voiceState.isActive.value) {
+        const msgs = chatStore.messages;
+        let lastContent = '';
+        for (let i = msgs.length - 1; i >= 0; i -= 1) {
+          if (msgs[i].role === 'assistant' && msgs[i].content) {
+            lastContent = msgs[i].content;
+            break;
+          }
+        }
+        if (lastContent) {
+          voiceState.state.value = 'speaking';
+          const cleanText = sanitizeForTts(lastContent);
+          if (cleanText) {
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = 'ru-RU';
+            utterance.rate = settingsStore.ttsRate;
+            utterance.pitch = 1.0;
+            utterance.onend = () => {
+              if (voiceState.isActive.value) {
+                voiceState.state.value = 'listening';
+                voiceModeService.resumeListening();
+              }
+            };
+            utterance.onerror = () => {
+              if (voiceState.isActive.value) {
+                voiceState.state.value = 'listening';
+                voiceModeService.resumeListening();
+              }
+            };
+            window.speechSynthesis.speak(utterance);
+          }
+        } else {
+          voiceState.state.value = 'listening';
+        }
+      }
+    });
+
+    function toggleVoiceMode() {
+      if (voiceState.isActive.value) {
+        voiceModeService.stop();
+      } else {
+        voiceModeService.start();
+      }
+    }
     let notifTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Watch sync state for notifications
@@ -231,7 +302,6 @@ export default defineComponent({
       }
 
       // Find last assistant message with content
-      const chatStore = useChatStore();
       const msgs = chatStore.displayMessages;
       let lastAssistant = '';
       for (let i = msgs.length - 1; i >= 0; i -= 1) {
@@ -244,11 +314,7 @@ export default defineComponent({
       if (!lastAssistant) return;
 
       // Clean markdown for speech
-      const cleanText = lastAssistant
-        .replace(/[#*_`[\]()>|~]/g, '')
-        .replace(/\n{2,}/g, '. ')
-        .replace(/\n/g, ' ')
-        .trim();
+      const cleanText = sanitizeForTts(lastAssistant);
 
       if (!cleanText) return;
 
@@ -290,6 +356,8 @@ export default defineComponent({
       stopTts,
       toggleTts,
       syncNotification,
+      voiceState,
+      toggleVoiceMode,
       onSessionSelected,
     };
   },
