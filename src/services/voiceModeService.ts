@@ -40,7 +40,7 @@ let accumulatedText = '';
 
 // --- Beep generator ---
 
-function playBeep() {
+function playBeep(freq = 880, duration = 0.15) {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     const ctx = new AudioCtx();
@@ -48,12 +48,12 @@ function playBeep() {
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = 880;
+    osc.frequency.value = freq;
     osc.type = 'sine';
     gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.15);
+    osc.stop(ctx.currentTime + duration);
   } catch {
     // AudioContext not available
   }
@@ -99,7 +99,8 @@ function onSilenceTimeout() {
   voiceState.transcript.value = '';
   voiceState.reasoning.value = '';
 
-  playBeep();
+  // Low beep — signal "sending to LLM"
+  playBeep(440, 0.2);
 
   const chatStore = useChatStore();
   const msgText = text;
@@ -257,6 +258,8 @@ export const voiceModeService = {
       recognition = null;
       isListening = false;
     }
+    // High beep — signal "you can speak now"
+    playBeep(1100, 0.1);
     startListening();
   },
 
