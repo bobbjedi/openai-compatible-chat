@@ -140,6 +140,7 @@ export default defineComponent({
             if ((!val && !hasFiles) || store.isStreaming) return;
             if (isListening.value) {
                 speechRecognition.stop();
+                isListening.value = false;
             }
 
             let parsed: ParseResult[] | undefined;
