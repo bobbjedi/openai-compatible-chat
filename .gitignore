@@ -18,6 +18,9 @@ node_modules
 
 # BEX related directories and files
 /src-bex/www
+
+# SSL certificates for local HTTPS
+*.pem
 /src-bex/js/core
 
 # Log files

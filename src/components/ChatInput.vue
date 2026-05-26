@@ -21,7 +21,7 @@
             <!-- Hidden file input -->
             <input ref="fileInputRef" type="file" multiple class="chatgpt-file-input-hidden"
                 @change="onFilesSelected" />
-            <q-input v-model="text" outlined dense autogrow placeholder="Message ChatGPT..." class="chatgpt-input"
+            <q-input v-model="text" outlined dense autogrow placeholder="Message ChatLLM..." class="chatgpt-input"
                 @keydown.enter.exact="onEnterKey">
                 <template #prepend>
                     <q-btn flat dense round size="sm" icon="attach_file" :disable="store.isStreaming"
@@ -55,12 +55,8 @@
 import { defineComponent, ref } from 'vue';
 import { useChatStore } from 'src/stores/chatStore';
 import { parseFiles, type ParseResult } from 'src/services/fileParser';
+import { speechRecognition } from 'src/services/speechRecognition';
 
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
-let SpeechRecognitionAPI: any = null;
-if (typeof window !== 'undefined') {
-    SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-}
 /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 
 export default defineComponent({
@@ -71,7 +67,7 @@ export default defineComponent({
         const pendingFiles = ref<File[]>([]);
         const fileInputRef = ref<HTMLInputElement | null>(null);
         const isListening = ref(false);
-        const recognitionSupported = ref(!!SpeechRecognitionAPI);
+        const recognitionSupported = ref(true); // будет проверено при старте
 
         const pendingPreviews = ref<string[]>([]);
 
@@ -113,61 +109,26 @@ export default defineComponent({
             pendingFiles.value.splice(index, 1);
         }
 
-        /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
-        let recognition: any = null;
-        let lastTranscript = ''; // для дедупликации
-
-        function initRecognition() {
-            if (!SpeechRecognitionAPI) return;
-            recognition = new SpeechRecognitionAPI();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            const langs = navigator.languages?.length
-                ? navigator.languages
-                : [Intl.DateTimeFormat().resolvedOptions().locale, navigator.language];
-            const isRu = langs.some((l) => l.toLowerCase().startsWith('ru'));
-            recognition.lang = isRu ? 'ru-RU' : 'en-US';
-
-            recognition.onresult = (event: any) => {
-                // Собираем все финальные результаты, которых ещё не было
-                let newText = '';
-                for (let i = event.resultIndex; i < event.results.length; i += 1) {
-                    const result = event.results[i];
-                    if (result.isFinal) {
-                        const transcript = result[0].transcript.trim();
-                        // Дедупликация: добавляем только если это новый текст
-                        if (transcript && transcript !== lastTranscript) {
-                            newText += transcript;
-                            lastTranscript = transcript;
-                        }
-                    }
-                }
-
-                if (newText) {
-                    text.value = text.value.trim()
-                        ? `${text.value.trim()} ${newText}`
-                        : newText;
-                }
-            };
-
-            recognition.onerror = (event: any) => {
-                console.error('[Voice] Recognition error:', event.error);
-                isListening.value = false;
-            };
-
-            recognition.onend = () => {
-                isListening.value = false;
-            };
-        }
-
         function toggleListening() {
-            if (!SpeechRecognitionAPI || store.isStreaming) return;
+            if (store.isStreaming) return;
             if (isListening.value) {
-                recognition?.stop();
+                speechRecognition.stop();
+                isListening.value = false;
             } else {
-                initRecognition();
                 isListening.value = true;
-                recognition?.start();
+                speechRecognition.start({
+                    onResult(transcript: string) {
+                        text.value = text.value.trim()
+                            ? `${text.value.trim()} ${transcript}`
+                            : transcript;
+                    },
+                    onError() {
+                        isListening.value = false;
+                    },
+                    onEnd() {
+                        // speechRecognition auto-restarts, nothing to do here
+                    },
+                });
             }
         }
 
@@ -178,7 +139,7 @@ export default defineComponent({
             console.log('[ChatInput] submit: text="', val, '" hasFiles=', hasFiles, 'files=', pendingFiles.value.map((f) => f.name));
             if ((!val && !hasFiles) || store.isStreaming) return;
             if (isListening.value) {
-                recognition?.stop();
+                speechRecognition.stop();
             }
 
             let parsed: ParseResult[] | undefined;

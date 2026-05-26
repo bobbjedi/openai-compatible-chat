@@ -17,6 +17,7 @@
 
 import { ref, type Ref } from 'vue';
 import { useChatStore } from 'src/stores/chatStore';
+import { speechRecognition } from './speechRecognition';
 
 // --- Состояние ---
 
@@ -33,9 +34,8 @@ export const voiceState = {
 
 // --- Внутренние переменные ---
 
-let recognition: any = null;
 let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-let isListening = false;
+let isProcessing = false;
 let accumulatedText = '';
 
 // --- Beep generator ---
@@ -67,11 +67,7 @@ function stopVoiceMode() {
   voiceState.transcript.value = '';
 
   window.speechSynthesis.cancel();
-
-  if (recognition && isListening) {
-    try { recognition.stop(); } catch { /* ignore */ }
-    isListening = false;
-  }
+  speechRecognition.stop();
 
   if (silenceTimer) {
     clearTimeout(silenceTimer);
@@ -82,24 +78,46 @@ function stopVoiceMode() {
 }
 
 function onSilenceTimeout() {
-  const text = accumulatedText.trim();
+  // Aggressive dedup: remove any word that appears more than once consecutively
+  const rawText = accumulatedText.trim();
+  if (!rawText || isProcessing) return;
+
+  const words = rawText.split(/\s+/);
+  const result: string[] = [];
+  let skipCount = 0;
+  words.forEach((w, idx) => {
+    if (skipCount > 0) {
+      skipCount -= 1;
+      return;
+    }
+    // Count consecutive occurrences of this word
+    let count = 1;
+    for (let j = idx + 1; j < words.length; j += 1) {
+      if (words[j].toLowerCase() === w.toLowerCase()) {
+        count += 1;
+      } else {
+        break;
+      }
+    }
+    // If word appears 3+ times consecutively, add only once
+    if (count >= 3) {
+      result.push(w);
+      skipCount = count - 1;
+    } else {
+      result.push(w);
+    }
+  });
+  const text = result.join(' ');
+
   if (!text) return;
 
-  // Stop listening and prevent re-start via onend
-  if (recognition && isListening) {
-    try { recognition.stop(); } catch { /* ignore */ }
-    isListening = false;
-  }
-  // Remove onend handler to prevent auto-restart
-  if (recognition) {
-    recognition.onend = null;
-  }
+  isProcessing = true;
+  speechRecognition.stop();
 
   voiceState.state.value = 'thinking';
   voiceState.transcript.value = '';
   voiceState.reasoning.value = '';
 
-  // Low beep — signal "sending to LLM"
   playBeep(440, 0.2);
 
   const chatStore = useChatStore();
@@ -108,7 +126,9 @@ function onSilenceTimeout() {
 
   chatStore.sendMessage(msgText).then(() => {
     voiceState.state.value = 'speaking';
+    isProcessing = false;
   }).catch(() => {
+    isProcessing = false;
     if (voiceState.isActive.value) {
       voiceState.state.value = 'listening';
     }
@@ -118,74 +138,35 @@ function onSilenceTimeout() {
 // --- Speech Recognition ---
 
 function startListening() {
-  const SpeechRecognitionAPI = (window as any).SpeechRecognition
-    || (window as any).webkitSpeechRecognition;
-  if (!SpeechRecognitionAPI) return;
-
-  if (recognition && isListening) return;
-
-  // If TTS is speaking, stop it — user wants to interrupt
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
   }
 
-  if (!recognition) {
-    recognition = new SpeechRecognitionAPI();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    const langs = navigator.languages?.length
-      ? navigator.languages
-      : [Intl.DateTimeFormat().resolvedOptions().locale, navigator.language];
-    const isRu = langs.some((l: string) => l.toLowerCase().startsWith('ru'));
-    recognition.lang = isRu ? 'ru-RU' : 'en-US';
-
-    recognition.onresult = function onResult(event: any) {
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        if (event.results[i].isFinal) {
-          const newText = event.results[i][0].transcript.trim();
-          // Dedup: skip if new text is already at the end of accumulated text
-          if (newText && !accumulatedText.endsWith(newText)
-            && !accumulatedText.endsWith(newText.toLowerCase())) {
-            accumulatedText += newText;
-          }
-        }
-      }
-
-      let fullText = accumulatedText;
-      const lastResult = event.results[event.results.length - 1];
-      if (!lastResult.isFinal) {
-        const interim = lastResult[0].transcript.trim();
-        // Only show interim if it's not already in accumulated
-        if (interim && !accumulatedText.endsWith(interim)) {
-          fullText += interim;
-        }
-      }
-      voiceState.transcript.value = fullText;
+  speechRecognition.start({
+    onResult(text: string) {
+      if (isProcessing) return;
+      accumulatedText = text;
+      voiceState.transcript.value = text;
 
       if (silenceTimer) clearTimeout(silenceTimer);
       silenceTimer = setTimeout(onSilenceTimeout, voiceState.silenceDelay.value);
-    };
-
-    recognition.onerror = function onError() {
-      stopVoiceMode();
-    };
-
-    recognition.onend = function onEnd() {
-      isListening = false;
-      if (voiceState.isActive.value) {
-        startListening();
+    },
+    onInterim(text: string) {
+      if (!isProcessing) {
+        voiceState.transcript.value = text;
       }
-    };
-  }
+    },
+    onError() {
+      stopVoiceMode();
+    },
+    onEnd() {
+      if (voiceState.isActive.value && !isProcessing) {
+        setTimeout(startListening, 300);
+      }
+    },
+  });
 
-  try {
-    recognition.start();
-    isListening = true;
-    voiceState.state.value = 'listening';
-  } catch {
-    // Already started
-  }
+  voiceState.state.value = 'listening';
 }
 
 // --- TTS ---
@@ -262,11 +243,7 @@ export const voiceModeService = {
     voiceState.state.value = 'listening';
     voiceState.reasoning.value = '';
     // Re-create recognition to get fresh onend handler
-    if (recognition) {
-      try { recognition.stop(); } catch { /* ignore */ }
-      recognition = null;
-      isListening = false;
-    }
+    speechRecognition.stop();
     // High beep — signal "you can speak now"
     playBeep(1100, 0.1);
     startListening();

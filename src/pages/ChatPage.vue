@@ -3,7 +3,7 @@
         <!-- Header -->
         <q-bar class="chatgpt-bar">
             <div class="text-subtitle2 ellipsis">
-                {{ store.currentSession?.title || 'ChatGPT' }}
+                {{ store.currentSession?.title || 'ChatLLM' }}
             </div>
             <q-space />
             <q-btn v-if="store.currentSession?.summary" flat dense size="sm" icon="description" color="grey-6"

@@ -87,9 +87,14 @@ module.exports = configure((ctx) => ({
   // Full list of options: https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-devServer
   devServer: {
     server: {
-      type: 'http',
+      type: 'https',
+      options: {
+        key: './key.pem',
+        cert: './cert.pem',
+      },
     },
     port: 8080,
+    host: '0.0.0.0',
     open: true, // opens browser window automatically
   },
 
@@ -155,7 +160,7 @@ module.exports = configure((ctx) => ({
     manifest: {
       name: 'OpenAI-Compatible Chat',
       short_name: 'LLM Chat',
-      description: 'ChatGPT-like SPA for any OpenAI-compatible API',
+      description: 'ChatLLM-like SPA for any OpenAI-compatible API',
       display: 'standalone',
       orientation: 'portrait',
       background_color: '#ffffff',

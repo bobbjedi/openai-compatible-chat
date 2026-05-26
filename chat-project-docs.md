@@ -1,4 +1,4 @@
-# ChatGPT-подобное чат-приложение на Quasar (Vue 3 + TypeScript)
+# ChatLLM-подобное чат-приложение на Quasar (Vue 3 + TypeScript)
 
 > Полная документация по реализованному проекту
 
@@ -120,12 +120,12 @@ User Input (ChatInput.vue)
 
 ### [`ChatInput.vue`](src/components/ChatInput.vue)
 
-Поле ввода в стиле ChatGPT: pill-форма (border-radius: 24px), autogrow, кнопка отправки (стрелка вверх) / остановки (stop).
+Поле ввода в стиле ChatLLM: pill-форма (border-radius: 24px), autogrow, кнопка отправки (стрелка вверх) / остановки (stop).
 
 - **Enter** — отправка сообщения
 - **Кнопка Stop** — отмена стриминга через `AbortController`
 - **Отключено** во время стриминга
-- **Disclaimer**: «ChatGPT can make mistakes. Check important info.»
+- **Disclaimer**: «ChatLLM can make mistakes. Check important info.»
 - **Голосовой ввод** (кнопка микрофона в `#append` слоте):
   - Использует Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`)
   - Поддержка проверяется через `'SpeechRecognition' in window || 'webkitSpeechRecognition' in window`
@@ -213,7 +213,7 @@ Flex-контейнер для корректного скролла:
 ### [`MainLayout.vue`](src/layouts/MainLayout.vue)
 
 Корневой layout приложения:
-- **Header** с кнопкой меню (бургер), заголовком «ChatGPT» и кнопкой шестерёнки
+- **Header** с кнопкой меню (бургер), заголовком «ChatLLM» и кнопкой шестерёнки
 - **Шестерёнка** → открывает [`ChatSettingsDialog`](src/components/ChatSettingsDialog.vue) (настройки чата: system prompt, загрузка из .txt)
 - **Sidebar** (`q-drawer`) — содержит [`SessionList`](src/components/SessionList.vue)
 - **Сворачивание sidebar**: при выборе/создании чата (`@session-selected`) sidebar автоматически закрывается (`leftDrawerOpen = false`)
@@ -230,10 +230,10 @@ Flex-контейнер для корректного скролла:
   - Кнопка закрытия (×) — скрывает баннер
   - Автоматически скрывается при смене сессии
   - Управляется через `chatStore.factsNotification` (boolean)
-- **Welcome screen** — логотип ChatGPT + «How can I help you?» (показывается когда нет сообщений и нет стриминга)
+- **Welcome screen** — логотип ChatLLM + «How can I help you?» (показывается когда нет сообщений и нет стриминга)
 - **Список сообщений** (`v-for` по `store.displayMessages`):
   - Каждое сообщение — строка с аватаром и контентом
-  - Ассистент: зелёный логотип ChatGPT слева
+  - Ассистент: зелёный логотип ChatLLM слева
   - Пользователь: зелёный круг с иконкой человека слева
   - Markdown-рендеринг для ассистента (`marked` + `DOMPurify`)
   - **Кнопки действий** (`.chatgpt-msg-actions`) на каждом сообщении (кроме режима редактирования и стриминга):
@@ -380,7 +380,7 @@ interface ChatParams { endpoint: string; apiKey: string; model: string; messages
 
 ---
 
-## 9. Стилизация (ChatGPT UI)
+## 9. Стилизация (ChatLLM UI)
 
 ### Светлая тема (по умолчанию)
 
@@ -392,7 +392,7 @@ interface ChatParams { endpoint: string; apiKey: string; model: string; messages
 | Sidebar | `#f9f9f9` |
 | Header | `#ffffff`, border-bottom: `#e5e5e5` |
 | Текст | `#1f1f1f` |
-| Акцент (логотип, аватар) | `#10a37f` (ChatGPT green) |
+| Акцент (логотип, аватар) | `#10a37f` (ChatLLM green) |
 
 ### Тёмная тема (`body.body--dark`)
 

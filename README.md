@@ -1,6 +1,6 @@
 # openai-compatible-chat
 
-> Web-only ChatGPT-like SPA built with Quasar/Vue 3. Works with DeepSeek, OpenAI, and any API supporting chat/completions. All data is stored **exclusively in your browser** (IndexedDB) — no backend, no server, no cloud sync.
+> Web-only ChatLLM-like SPA built with Quasar/Vue 3. Works with DeepSeek, OpenAI, and any API supporting chat/completions. All data is stored **exclusively in your browser** (IndexedDB) — no backend, no server, no cloud sync.
 
 [![Quasar](https://img.shields.io/badge/Quasar-2.14-1976D2?logo=quasar)](https://quasar.dev/)
 [![Vue](https://img.shields.io/badge/Vue-3.x-4FC08D?logo=vue.js)](https://vuejs.org/)
@@ -24,7 +24,7 @@
 - **Markdown rendering** — `marked` + `DOMPurify` for safe, formatted assistant responses
 - **Message editing** — edit any user message, truncate follow-ups, and re-stream the answer
 - **Context trimming** — token-aware message pruning to fit within configurable limits (up to 2M tokens)
-- **ChatGPT-style UI** — pill-shaped input, collapsible sidebar, session rename/delete, copy-to-clipboard
+- **ChatLLM-style UI** — pill-shaped input, collapsible sidebar, session rename/delete, copy-to-clipboard
 - **Multi-model support** — select from preset DeepSeek models or enter any custom model name
 - **PWA ready** — installable as a standalone app with generated icons
 

@@ -60,7 +60,7 @@ openai-compatible-chat/
 │   │   └── i18n.ts                   # Инициализация vue-i18n
 │   ├── i18n/                         # Локализация (en-US)
 │   ├── css/
-│   │   ├── app.scss                  # ChatGPT-стиль: светлая/тёмная тема (~1070 строк)
+│   │   ├── app.scss                  # ChatLLM-стиль: светлая/тёмная тема (~1070 строк)
 │   │   └── quasar.variables.scss     # Переменные Quasar
 │   └── assets/
 ├── src-pwa/                          # PWA: service worker, регистрация, манифест

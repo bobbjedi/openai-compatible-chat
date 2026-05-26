@@ -6,6 +6,11 @@ const routes = [
   },
 
   {
+    path: '/voice-debug',
+    component: () => import('pages/VoiceDebugPage.vue'),
+  },
+
+  {
     path: '/:catchAll(.*)*',
     component: () => import('pages/Error404.vue'),
   },
