@@ -1,74 +1,71 @@
 <template>
     <transition name="voice-fade">
         <div v-if="voiceState.isActive.value" class="voice-overlay" @click.self="voiceModeService.stop()">
-            <!-- Анимация фона — пульсирующие круги -->
-            <div class="voice-bg-animation" :class="`voice-bg--${voiceState.state.value}`">
-                <div class="voice-circle voice-circle--1" />
-                <div class="voice-circle voice-circle--2" />
-                <div class="voice-circle voice-circle--3" />
-            </div>
+            <!-- Анимированный градиентный фон -->
+            <div class="voice-bg-gradient" :class="`voice-bg--${voiceState.state.value}`" />
 
-            <!-- Верхняя панель: регулировка паузы тишины -->
-            <div class="voice-top-bar">
-                <div class="voice-control-group">
-                    <span class="voice-label">Silence: {{ silenceLabel }}</span>
-                    <div class="voice-controls">
-                        <q-btn flat dense round size="sm" icon="remove" color="white" @click="adjustSilence(-250)" />
-                        <q-slider v-model="localSilence" :min="500" :max="5000" :step="250" style="width: 120px"
-                            color="white" :label-value="`${Math.round(localSilence / 1000 * 10) / 10}s`"
-                            @update:model-value="onSilenceChange" />
-                        <q-btn flat dense round size="sm" icon="add" color="white" @click="adjustSilence(250)" />
+            <!-- Центральный контейнер -->
+            <div class="voice-center">
+                <!-- Анимированная сфера -->
+                <div class="voice-sphere" :class="`voice-sphere--${voiceState.state.value}`">
+                    <div class="voice-sphere-inner">
+                        <template v-if="voiceState.state.value === 'listening'">
+                            <q-icon name="mic" size="56px" color="white" />
+                        </template>
+                        <template v-else-if="voiceState.state.value === 'thinking'">
+                            <q-icon name="psychology" size="56px" color="white" />
+                        </template>
+                        <template v-else-if="voiceState.state.value === 'speaking'">
+                            <q-icon name="volume_up" size="56px" color="white" />
+                        </template>
                     </div>
                 </div>
-            </div>
 
-            <!-- Центр: состояние и транскрипт -->
-            <div class="voice-center">
-                <div class="voice-state-icon">
-                    <template v-if="voiceState.state.value === 'listening'">
-                        <q-icon name="mic" size="48px" color="white" class="voice-pulse" />
-                    </template>
-                    <template v-else-if="voiceState.state.value === 'thinking'">
-                        <q-spinner-puff size="48px" color="warning" />
-                    </template>
-                    <template v-else-if="voiceState.state.value === 'speaking'">
-                        <q-icon name="volume_up" size="48px" color="positive" class="voice-pulse" />
-                    </template>
-                </div>
-
+                <!-- Статус -->
                 <div class="voice-state-label">
-                    <template v-if="voiceState.state.value === 'listening'">Listening...</template>
-                    <template v-else-if="voiceState.state.value === 'thinking'">Thinking...</template>
-                    <template v-else-if="voiceState.state.value === 'speaking'">Speaking...</template>
+                    <template v-if="voiceState.state.value === 'listening'">Listening</template>
+                    <template v-else-if="voiceState.state.value === 'thinking'">Thinking</template>
+                    <template v-else-if="voiceState.state.value === 'speaking'">Speaking</template>
                 </div>
 
+                <!-- Транскрипт -->
                 <div v-if="voiceState.transcript.value" class="voice-transcript">
                     {{ voiceState.transcript.value }}
                 </div>
 
-                <!-- Reasoning — показывается когда LLM думает -->
+                <!-- Reasoning -->
                 <div v-if="voiceState.state.value === 'thinking' && voiceState.reasoning.value" class="voice-reasoning">
-                    <div class="voice-reasoning-label">Reasoning</div>
                     <div class="voice-reasoning-text">{{ voiceState.reasoning.value }}</div>
                 </div>
             </div>
 
-            <!-- Нижняя панель: скорость TTS + Stop -->
+            <!-- Нижняя панель управления -->
             <div class="voice-bottom-bar">
-                <div class="voice-control-group">
-                    <span class="voice-label">Speed: {{ Math.round(localRate * 100) }}%</span>
-                    <div class="voice-controls">
-                        <q-btn flat dense round size="sm" icon="remove" color="white" @click="adjustRate(-0.05)" />
-                        <q-slider v-model="localRate" :min="0.3" :max="2.0" :step="0.05" style="width: 120px"
-                            color="white" @update:model-value="onRateChange" />
-                        <q-btn flat dense round size="sm" icon="add" color="white" @click="adjustRate(0.05)" />
+                <div class="voice-controls-row">
+                    <div class="voice-control-group">
+                        <span class="voice-label">Silence</span>
+                        <div class="voice-controls">
+                            <q-btn flat dense round size="xs" icon="remove" color="grey-4"
+                                @click="adjustSilence(-250)" />
+                            <span class="voice-value">{{ silenceLabel }}</span>
+                            <q-btn flat dense round size="xs" icon="add" color="grey-4" @click="adjustSilence(250)" />
+                        </div>
+                    </div>
+
+                    <q-btn round size="md" flat class="voice-stop-btn" @click="voiceModeService.stop()">
+                        <q-icon name="stop" size="24px" color="negative" />
+                        <q-tooltip>Stop</q-tooltip>
+                    </q-btn>
+
+                    <div class="voice-control-group">
+                        <span class="voice-label">Speed</span>
+                        <div class="voice-controls">
+                            <q-btn flat dense round size="xs" icon="remove" color="grey-4" @click="adjustRate(-0.05)" />
+                            <span class="voice-value">{{ Math.round(localRate * 100) }}%</span>
+                            <q-btn flat dense round size="xs" icon="add" color="grey-4" @click="adjustRate(0.05)" />
+                        </div>
                     </div>
                 </div>
-
-                <q-btn round size="lg" color="negative" icon="stop" class="voice-stop-btn"
-                    @click="voiceModeService.stop()">
-                    <q-tooltip>Stop Voice Mode</q-tooltip>
-                </q-btn>
             </div>
         </div>
     </transition>
@@ -162,177 +159,165 @@ export default defineComponent({
     right: 0;
     bottom: 0;
     z-index: 9999;
-    background: rgba(0, 0, 0, 0.92);
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    padding: 40px 20px;
+    justify-content: center;
     color: white;
     overflow: hidden;
+    background: #0a0a0f;
 }
 
-/* ---- Background animation ---- */
-.voice-bg-animation {
+/* ---- Gradient background ---- */
+.voice-bg-gradient {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 300px;
-    height: 300px;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 30% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 50%, rgba(34, 197, 94, 0.05) 0%, transparent 60%);
+    animation: gradient-shift 8s ease-in-out infinite alternate;
+    transition: background 0.5s ease;
 }
 
-.voice-circle {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    border: 2px solid;
-    opacity: 0.3;
-    animation: voice-pulse 2s ease-in-out infinite;
+.voice-bg--thinking {
+    background: radial-gradient(ellipse at 30% 50%, rgba(245, 158, 11, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 50%, rgba(245, 158, 11, 0.06) 0%, transparent 60%);
 }
 
-.voice-circle--1 {
-    width: 100px;
-    height: 100px;
-    animation-delay: 0s;
+.voice-bg--speaking {
+    background: radial-gradient(ellipse at 30% 50%, rgba(34, 197, 94, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 50%, rgba(34, 197, 94, 0.06) 0%, transparent 60%);
 }
 
-.voice-circle--2 {
-    width: 180px;
-    height: 180px;
-    animation-delay: 0.5s;
-}
+@keyframes gradient-shift {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+    }
 
-.voice-circle--3 {
-    width: 260px;
-    height: 260px;
-    animation-delay: 1s;
-}
-
-/* State colors */
-.voice-bg--listening .voice-circle {
-    border-color: #3b82f6;
-}
-
-.voice-bg--thinking .voice-circle {
-    border-color: #f59e0b;
-}
-
-.voice-bg--speaking .voice-circle {
-    border-color: #22c55e;
-}
-
-@keyframes voice-pulse {
-
-    0%,
     100% {
-        transform: translate(-50%, -50%) scale(1);
-        opacity: 0.3;
-    }
-
-    50% {
-        transform: translate(-50%, -50%) scale(1.1);
-        opacity: 0.6;
+        transform: translate(-5%, -5%) rotate(5deg);
     }
 }
 
-/* ---- Top / Bottom bars ---- */
-.voice-top-bar,
-.voice-bottom-bar {
-    position: relative;
-    z-index: 10;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-}
-
-.voice-bottom-bar {
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
-}
-
-.voice-control-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.voice-label {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.voice-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* ---- Center state ---- */
+/* ---- Center ---- */
 .voice-center {
     position: relative;
     z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 24px;
 }
 
-.voice-state-icon {
-    width: 64px;
-    height: 64px;
+/* ---- Sphere ---- */
+.voice-sphere {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+    transition: all 0.5s ease;
 }
 
-.voice-pulse {
-    animation: voice-icon-pulse 1.5s ease-in-out infinite;
+.voice-sphere--listening {
+    background: radial-gradient(circle at 35% 35%, rgba(59, 130, 246, 0.4), rgba(37, 99, 235, 0.6));
+    box-shadow: 0 0 60px rgba(59, 130, 246, 0.3), inset 0 0 40px rgba(59, 130, 246, 0.1);
+    animation: sphere-pulse-listening 2s ease-in-out infinite;
 }
 
-@keyframes voice-icon-pulse {
+.voice-sphere--thinking {
+    background: radial-gradient(circle at 35% 35%, rgba(245, 158, 11, 0.4), rgba(217, 119, 6, 0.6));
+    box-shadow: 0 0 60px rgba(245, 158, 11, 0.3), inset 0 0 40px rgba(245, 158, 11, 0.1);
+    animation: sphere-pulse-thinking 1.5s ease-in-out infinite;
+}
+
+.voice-sphere--speaking {
+    background: radial-gradient(circle at 35% 35%, rgba(34, 197, 94, 0.4), rgba(22, 163, 74, 0.6));
+    box-shadow: 0 0 60px rgba(34, 197, 94, 0.3), inset 0 0 40px rgba(34, 197, 94, 0.1);
+    animation: sphere-pulse-speaking 0.8s ease-in-out infinite;
+}
+
+.voice-sphere-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.15), transparent 60%);
+}
+
+@keyframes sphere-pulse-listening {
 
     0%,
     100% {
-        opacity: 1;
         transform: scale(1);
+        box-shadow: 0 0 60px rgba(59, 130, 246, 0.3);
     }
 
     50% {
-        opacity: 0.6;
-        transform: scale(1.1);
+        transform: scale(1.05);
+        box-shadow: 0 0 80px rgba(59, 130, 246, 0.4);
     }
 }
 
-.voice-state-label {
-    font-size: 18px;
-    font-weight: 500;
-    letter-spacing: 0.5px;
+@keyframes sphere-pulse-thinking {
+
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 60px rgba(245, 158, 11, 0.3);
+    }
+
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 0 70px rgba(245, 158, 11, 0.35);
+    }
 }
 
+@keyframes sphere-pulse-speaking {
+
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 60px rgba(34, 197, 94, 0.3);
+    }
+
+    50% {
+        transform: scale(1.08);
+        box-shadow: 0 0 90px rgba(34, 197, 94, 0.45);
+    }
+}
+
+/* ---- State label ---- */
+.voice-state-label {
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ---- Transcript ---- */
 .voice-transcript {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.6);
     text-align: center;
-    max-width: 80%;
-    line-height: 1.4;
-    padding: 12px 20px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    max-width: 70%;
+    line-height: 1.5;
+    padding: 10px 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
     min-height: 20px;
+    backdrop-filter: blur(10px);
 }
 
-.voice-stop-btn {
-    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4);
-}
-
-/* ---- Reasoning display ---- */
+/* ---- Reasoning ---- */
 .voice-reasoning {
     position: fixed;
     top: 0;
@@ -344,27 +329,84 @@ export default defineComponent({
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 80px 40px;
+    padding: 100px 60px;
     pointer-events: none;
 }
 
-.voice-reasoning-label {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.25);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 12px;
-}
-
 .voice-reasoning-text {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.15);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.1);
     text-align: center;
-    max-width: 70%;
+    max-width: 60%;
     line-height: 1.6;
-    max-height: 50vh;
+    max-height: 40vh;
     overflow-y: auto;
     font-style: italic;
+}
+
+/* ---- Bottom bar ---- */
+.voice-bottom-bar {
+    position: absolute;
+    bottom: 40px;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    padding: 0 20px;
+}
+
+.voice-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 12px 24px;
+    backdrop-filter: blur(12px);
+}
+
+.voice-control-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 80px;
+}
+
+.voice-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.voice-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.voice-value {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    min-width: 36px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.voice-stop-btn {
+    width: 44px;
+    height: 44px;
+    background: rgba(220, 38, 38, 0.1);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    transition: all 0.2s ease;
+}
+
+.voice-stop-btn:hover {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: rgba(220, 38, 38, 0.4);
 }
 
 /* ---- Transition ---- */
