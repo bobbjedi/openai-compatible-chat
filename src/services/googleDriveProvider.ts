@@ -102,15 +102,18 @@ function loadGsiScript(): Promise<void> {
   });
 }
 
+const TOKEN_STORAGE_KEY = 'google-drive-token';
+
 function getTokenFromStorage(): AuthState | null {
   try {
-    const raw = sessionStorage.getItem('google-drive-token');
+    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!raw) return null;
     const parsed: AuthState = JSON.parse(raw);
     if (parsed.expiresAt > Date.now()) {
       return parsed;
     }
-    sessionStorage.removeItem('google-drive-token');
+    // Token expired — clean up
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
     return null;
   } catch {
     return null;
@@ -119,15 +122,15 @@ function getTokenFromStorage(): AuthState | null {
 
 function saveTokenToStorage(token: AuthState): void {
   try {
-    sessionStorage.setItem('google-drive-token', JSON.stringify(token));
+    localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(token));
   } catch {
-    // sessionStorage unavailable
+    // localStorage unavailable
   }
 }
 
 function clearTokenFromStorage(): void {
   try {
-    sessionStorage.removeItem('google-drive-token');
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
   } catch {
     // ignore
   }

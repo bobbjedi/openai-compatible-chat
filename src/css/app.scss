@@ -484,6 +484,18 @@ body.body--dark .chatgpt-sidebar-footer .q-icon {
   border-radius: 12px !important;
 }
 
+/* Fix: hint text in dialog inputs shouldn't overlap next field */
+.chatgpt-dialog .q-field--with-bottom {
+  margin-bottom: 8px;
+}
+
+.chatgpt-dialog .q-field__bottom {
+  min-height: 18px;
+  font-size: 11px;
+  line-height: 1.3;
+  padding-top: 2px;
+}
+
 /* ---- Settings menu (light) ---- */
 .chatgpt-settings-menu {
   background: #ffffff !important;

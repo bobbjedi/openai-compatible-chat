@@ -75,14 +75,26 @@ export const useChatStore = defineStore('chat', () => {
       tokenBudget += estimateTokens(summary) + 16;
     }
 
+    // Helper to format timestamp for LLM context
+    function formatMsgTime(ts: number): string {
+      const d = new Date(ts);
+      const now = new Date();
+      const isToday = d.toDateString() === now.toDateString();
+      const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      if (isToday) return `[${time}]`;
+      const date = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+      return `[${date} ${time}]`;
+    }
+
     // Collect user/assistant/searchResult from the end, until we exceed the limit.
     // searchResult messages are mapped to 'user' role for the LLM API.
     const eligible: { role: 'user' | 'assistant'; content: string }[] = [];
     messagesArr.forEach((m) => {
+      const timePrefix = m.createdAt ? formatMsgTime(m.createdAt) : '';
       if (m.role === 'searchResult') {
         eligible.push({ role: 'user', content: m.content });
       } else if (m.role === 'user' || (m.role === 'assistant' && m.content !== '')) {
-        eligible.push({ role: m.role, content: m.content });
+        eligible.push({ role: m.role, content: `${timePrefix} ${m.content}` });
       }
     });
 

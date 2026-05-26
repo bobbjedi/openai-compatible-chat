@@ -1,8 +1,8 @@
 {
   "name": "chat",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "ChatGPT-like SPA for any OpenAI-compatible API. Voice input, rolling summaries, user facts.",
-  "productName": "OpenAI-Compatible Chat",
+  "productName": "Simple LLM Chat",
   "author": "bobbjedi <bobbrownjedi@gmail.com>",
   "private": true,
   "scripts": {

@@ -139,6 +139,80 @@ export const syncService = {
   },
 
   /**
+   * Push только одной сессии в Drive.
+   */
+  async pushSession(
+    sessionId: string,
+    getMessages: (id: string) => Message[],
+    getSessions: () => Session[],
+    getUserFacts: () => string[],
+    getAppVersion: () => string,
+  ): Promise<void> {
+    if (!googleDriveProvider.isSignedIn) {
+      throw new Error('Not signed in to Google Drive');
+    }
+
+    syncState.isSyncing.value = true;
+    syncState.syncError.value = null;
+
+    try {
+      const messages = getMessages(sessionId);
+      if (messages.length > 0) {
+        const driveMessages: DriveMessageData[] = messages.map((m) => ({
+          id: m.id,
+          uuid: m.uuid,
+          sessionId: m.sessionId,
+          role: m.role,
+          content: m.content,
+          reasoning: m.reasoning,
+          searchMeta: m.searchMeta,
+          attachments: m.attachments,
+          createdAt: m.createdAt,
+        }));
+        await googleDriveProvider.writeSessionMessages(sessionId, driveMessages);
+      }
+
+      // Push sessions list
+      const allSessions = getSessions();
+      const driveSessions: DriveSessionData[] = allSessions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+        systemPrompt: s.systemPrompt,
+        summary: s.summary,
+        summaryEnabled: s.summaryEnabled,
+      }));
+      await googleDriveProvider.writeSessions(driveSessions);
+
+      // Push user facts
+      const facts = getUserFacts();
+      const factsData: DriveUserFacts = { facts, updatedAt: Date.now() };
+      await googleDriveProvider.writeUserFacts(factsData);
+
+      // Push manifest
+      const totalMessages = allSessions.reduce((acc, s) => (
+        acc + getMessages(s.id).length
+      ), 0);
+      await googleDriveProvider.writeManifest({
+        version: 1,
+        appVersion: getAppVersion(),
+        lastSyncedAt: Date.now(),
+        sessionsCount: allSessions.length,
+        totalMessages,
+      });
+
+      syncState.lastSyncAt.value = Date.now();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sync failed';
+      syncState.syncError.value = msg;
+      throw err;
+    } finally {
+      syncState.isSyncing.value = false;
+    }
+  },
+
+  /**
    * Полный push всех данных в Drive.
    */
   async pushAll(

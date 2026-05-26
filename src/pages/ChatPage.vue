@@ -94,6 +94,9 @@
                     <div class="chatgpt-msg-content">
                         <div class="chatgpt-msg-author">
                             {{ msg.role === 'assistant' ? 'LLM' : 'You' }}
+                            <span class="chatgpt-msg-time text-caption text-grey-5 q-ml-sm">
+                                {{ formatTime(msg.createdAt) }}
+                            </span>
                         </div>
                         <!-- Search result meta banner (attached to assistant response) -->
                         <div v-if="msg.searchMeta && msg.role === 'assistant'" class="chatgpt-search-meta">
@@ -253,9 +256,31 @@ export default defineComponent({
             await store.init();
         });
 
+        function formatTime(ts: number): string {
+            if (!ts || ts === 0) return '';
+            const date = new Date(ts);
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            const isYesterday = new Date(now.getTime() - 86400000).toDateString() === date.toDateString();
+            const time = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+            if (isToday) return time;
+            if (isYesterday) return `вчера ${time}`;
+            return `${date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} ${time}`;
+        }
+
         function renderMarkdown(text: string): string {
             const raw = marked.parse(text, { async: false }) as string;
             return DOMPurify.sanitize(raw);
+        }
+
+        const SCROLL_THRESHOLD = 20; // px — порог срабатывания автоскролла
+
+        function isNearBottom(): boolean {
+            const el = scrollRef.value;
+            if (!el) return true;
+            const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+            return dist < SCROLL_THRESHOLD;
         }
 
         function scrollToBottom() {
@@ -263,13 +288,19 @@ export default defineComponent({
             if (el) el.scrollTop = el.scrollHeight;
         }
 
+        // Срабатывает при добавлении нового сообщения
         watch(
             () => store.displayMessages.length,
             () => {
-                void nextTick().then(scrollToBottom);
+                void nextTick().then(() => {
+                    if (isNearBottom()) {
+                        scrollToBottom();
+                    }
+                });
             },
         );
 
+        // Срабатывает при стриминге контента
         watch(
             () => {
                 const msgs = store.displayMessages;
@@ -277,14 +308,8 @@ export default defineComponent({
             },
             () => {
                 void nextTick().then(() => {
-                    const el = scrollRef.value;
-                    if (el) {
-                        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-                        // Auto-scroll only if user is near the bottom (< 100px).
-                        // If user scrolled up to read earlier messages — stay put.
-                        if (dist < 100) {
-                            el.scrollTop = el.scrollHeight;
-                        }
+                    if (isNearBottom()) {
+                        scrollToBottom();
                     }
                 });
             },
@@ -369,6 +394,7 @@ export default defineComponent({
             store,
             scrollRef,
             renderMarkdown,
+            formatTime,
             editingId,
             editText,
             copyMessage,
