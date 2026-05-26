@@ -6,6 +6,33 @@
         <q-toolbar-title class="text-weight-medium">
           Simple LLM Chat
         </q-toolbar-title>
+        <q-btn flat dense round :icon="isSpeaking ? 'volume_up' : 'volume_down'" :color="isSpeaking ? 'positive' : ''"
+          @click="isSpeaking ? undefined : toggleTts()">
+          <q-tooltip>{{ isSpeaking ? 'Speaking — click for speed' : 'Read last response' }}</q-tooltip>
+          <q-menu v-if="isSpeaking" anchor="bottom end" self="top end" auto-close>
+            <q-list dense style="min-width: 200px">
+              <q-item-label header class="text-caption text-grey-7">Speed: {{ Math.round(settingsStore.ttsRate * 100)
+                }}%</q-item-label>
+              <q-item>
+                <q-item-section>
+                  <div class="row items-center q-gutter-xs">
+                    <q-btn flat dense round size="sm" icon="remove" color="negative" @click="adjustRate(-0.05)" />
+                    <q-slider v-model="localTtsRate" :min="0.3" :max="2.0" :step="0.05" label-always
+                      :label-value="`${Math.round(localTtsRate * 100)}%`" class="col"
+                      @update:model-value="onRateChange" />
+                    <q-btn flat dense round size="sm" icon="add" color="positive" @click="adjustRate(0.05)" />
+                  </div>
+                </q-item-section>
+              </q-item>
+              <q-separator />
+              <q-item clickable v-close-popup @click="stopTts">
+                <q-item-section class="text-negative">
+                  <q-item-label>⏹ Stop speaking</q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </q-btn>
         <q-btn flat dense round icon="fact_check" @click="showFactsDialog = true">
           <q-tooltip>User Facts</q-tooltip>
         </q-btn>
@@ -13,6 +40,13 @@
           <q-tooltip>Chat Settings</q-tooltip>
         </q-btn>
       </q-toolbar>
+      <!-- Sync notification banner -->
+      <transition name="fade">
+        <div v-if="syncNotification" class="chatgpt-sync-notification" :class="syncNotification.type">
+          <q-icon :name="syncNotification.icon" size="xs" class="q-mr-xs" />
+          <span class="text-caption">{{ syncNotification.text }}</span>
+        </div>
+      </transition>
     </q-header>
 
     <q-drawer v-model="leftDrawerOpen" show-if-above :width="260" :breakpoint="700" class="chatgpt-sidebar"
@@ -23,6 +57,23 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <!-- TTS control bar — visible while speaking -->
+    <transition name="slide-up">
+      <div v-if="isSpeaking" class="chatgpt-tts-bar">
+        <div class="row items-center q-gutter-sm q-px-md q-py-sm">
+          <q-icon name="volume_up" color="positive" size="sm" />
+          <span class="text-caption text-white">Speaking</span>
+          <q-space />
+          <span class="text-caption text-grey-4">{{ Math.round(localTtsRate * 100) }}%</span>
+          <q-btn flat dense round size="sm" icon="remove" color="white" @click="adjustRate(-0.05)" />
+          <q-slider v-model="localTtsRate" :min="0.3" :max="2.0" :step="0.05" style="width: 100px" color="white"
+            @update:model-value="onRateChange" />
+          <q-btn flat dense round size="sm" icon="add" color="white" @click="adjustRate(0.05)" />
+          <q-btn flat dense round size="sm" icon="stop" color="negative" @click="stopTts" />
+        </div>
+      </div>
+    </transition>
 
     <ChatSettingsDialog v-model="showChatSettings" />
 
@@ -88,23 +139,42 @@
 
 <script lang="ts">
 import {
-  defineComponent, ref, onMounted,
+  defineComponent, ref, onMounted, watch,
 } from 'vue';
 import SessionList from 'src/components/SessionList.vue';
 import ChatSettingsDialog from 'src/components/ChatSettingsDialog.vue';
 import { useSettingsStore } from 'src/stores/settingsStore';
+import { useChatStore } from 'src/stores/chatStore';
+import { syncState } from 'src/services/syncService';
 
 export default defineComponent({
   name: 'MainLayout',
   components: { SessionList, ChatSettingsDialog },
   setup() {
-    const leftDrawerOpen = ref(true);
+    const leftDrawerOpen = ref(false);
     const showChatSettings = ref(false);
     const showFactsDialog = ref(false);
     const editingFacts = ref(false);
     const factsText = ref('');
 
     const settingsStore = useSettingsStore();
+
+    const syncNotification = ref<{ text: string; icon: string; type: string } | null>(null);
+    let notifTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Watch sync state for notifications
+    watch(() => syncState.lastSyncAt.value, (newVal, oldVal) => {
+      if (newVal && newVal !== oldVal) {
+        const isUpload = !syncState.syncError.value;
+        syncNotification.value = {
+          text: isUpload ? '✓ Uploaded to Drive' : '✗ Sync error',
+          icon: isUpload ? 'cloud_done' : 'cloud_off',
+          type: isUpload ? 'positive' : 'negative',
+        };
+        if (notifTimer) clearTimeout(notifTimer);
+        notifTimer = setTimeout(() => { syncNotification.value = null; }, 3000);
+      }
+    });
 
     onMounted(async () => {
       await settingsStore.load();
@@ -129,6 +199,76 @@ export default defineComponent({
       editingFacts.value = false;
     }
 
+    const isSpeaking = ref(false);
+    const localTtsRate = ref(1.0);
+
+    // Загружаем сохранённую скорость из IndexedDB
+    onMounted(async () => {
+      await settingsStore.load();
+      localTtsRate.value = settingsStore.ttsRate;
+    });
+
+    function adjustRate(delta: number) {
+      const newRate = Math.round(Math.min(2.0, Math.max(0.3, localTtsRate.value + delta)) * 100) / 100;
+      localTtsRate.value = newRate;
+      settingsStore.saveTtsRate(newRate);
+    }
+
+    function onRateChange(val: number | null) {
+      if (val !== null) settingsStore.saveTtsRate(val);
+    }
+
+    function stopTts() {
+      window.speechSynthesis.cancel();
+      isSpeaking.value = false;
+    }
+
+    function toggleTts() {
+      if (isSpeaking.value) {
+        window.speechSynthesis.cancel();
+        isSpeaking.value = false;
+        return;
+      }
+
+      // Find last assistant message with content
+      const chatStore = useChatStore();
+      const msgs = chatStore.displayMessages;
+      let lastAssistant = '';
+      for (let i = msgs.length - 1; i >= 0; i -= 1) {
+        if (msgs[i].role === 'assistant' && msgs[i].content) {
+          lastAssistant = msgs[i].content;
+          break;
+        }
+      }
+
+      if (!lastAssistant) return;
+
+      // Clean markdown for speech
+      const cleanText = lastAssistant
+        .replace(/[#*_`[\]()>|~]/g, '')
+        .replace(/\n{2,}/g, '. ')
+        .replace(/\n/g, ' ')
+        .trim();
+
+      if (!cleanText) return;
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'ru-RU';
+      utterance.rate = settingsStore.ttsRate;
+      utterance.pitch = 1.0;
+
+      utterance.onend = () => {
+        isSpeaking.value = false;
+      };
+
+      utterance.onerror = () => {
+        isSpeaking.value = false;
+      };
+
+      isSpeaking.value = true;
+      window.speechSynthesis.speak(utterance);
+    }
+
     function onSessionSelected() {
       leftDrawerOpen.value = false;
     }
@@ -143,6 +283,13 @@ export default defineComponent({
       startEditFacts,
       startAddFact,
       saveFacts,
+      isSpeaking,
+      localTtsRate,
+      adjustRate,
+      onRateChange,
+      stopTts,
+      toggleTts,
+      syncNotification,
       onSessionSelected,
     };
   },

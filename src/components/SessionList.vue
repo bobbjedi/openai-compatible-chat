@@ -47,7 +47,7 @@
             </div>
         </q-scroll-area>
 
-        <!-- Bottom bar: Settings + Dark Mode + Sync status -->
+        <!-- Bottom bar: Settings + Dark Mode + Sync -->
         <div class="chatgpt-sidebar-footer">
             <q-list dense>
                 <q-item clickable v-ripple @click="showSettings = true">
@@ -65,20 +65,65 @@
                         {{ settingsStore.darkMode ? 'Light Mode' : 'Dark Mode' }}
                     </q-item-section>
                 </q-item>
-                <!-- Sync status indicator -->
-                <q-item v-if="syncState.isSignedIn.value" dense class="chatgpt-sync-status">
+                <!-- Sync: Sign in (if not signed in) -->
+                <q-item v-if="!syncState.isSignedIn.value" clickable v-ripple @click="handleSignIn">
                     <q-item-section avatar>
-                        <q-icon :name="syncIcon" :color="syncColor" size="xs" />
+                        <q-icon name="cloud_upload" color="primary" size="xs" />
                     </q-item-section>
-                    <q-item-section class="text-caption">
-                        {{ syncLabel }}
-                    </q-item-section>
+                    <q-item-section class="text-primary">Sign in to Drive</q-item-section>
                 </q-item>
+                <!-- Sync: buttons (if signed in) -->
+                <template v-if="syncState.isSignedIn.value">
+                    <q-item clickable v-ripple :disable="syncState.isSyncing.value" @click="handleSyncNow">
+                        <q-item-section avatar>
+                            <q-icon :name="syncState.isSyncing.value
+                                ? 'cloud_sync' : 'cloud_upload'" color="positive" size="xs" />
+                        </q-item-section>
+                        <q-item-section class="text-positive">
+                            {{ syncState.isSyncing.value ? 'Uploading...' : 'Upload' }}
+                        </q-item-section>
+                    </q-item>
+                    <q-item clickable v-ripple :disable="syncState.isSyncing.value" @click="confirmPull = true">
+                        <q-item-section avatar>
+                            <q-icon name="cloud_download" color="warning" size="xs" />
+                        </q-item-section>
+                        <q-item-section class="text-warning">Download</q-item-section>
+                    </q-item>
+                    <!-- Sync status -->
+                    <q-item v-if="syncState.lastSyncAt.value" dense class="chatgpt-sync-status">
+                        <q-item-section avatar>
+                            <q-icon :name="syncIcon" :color="syncColor" size="xs" />
+                        </q-item-section>
+                        <q-item-section class="text-caption">
+                            {{ syncLabel }}
+                        </q-item-section>
+                    </q-item>
+                </template>
             </q-list>
             <div class="chatgpt-sidebar-version text-caption text-grey-6 q-px-md q-pb-sm">
                 v{{ appVersion }}
             </div>
         </div>
+
+        <!-- Pull confirmation dialog -->
+        <q-dialog v-model="confirmPull" persistent>
+            <q-card>
+                <q-card-section class="row items-center">
+                    <q-icon name="warning" color="warning" size="md" class="q-mr-md" />
+                    <div>
+                        <div class="text-h6">Download from Drive?</div>
+                        <div class="text-caption text-grey-7">
+                            This will <strong>replace all local data</strong> with data from Google Drive.
+                        </div>
+                    </div>
+                </q-card-section>
+                <q-card-actions align="right">
+                    <q-btn flat label="Cancel" v-close-popup />
+                    <q-btn flat label="Download & Replace" color="warning" :loading="syncState.isSyncing.value"
+                        @click="handlePull" />
+                </q-card-actions>
+            </q-card>
+        </q-dialog>
 
         <!-- Rename dialog -->
         <q-dialog v-model="renameDialog" persistent>
@@ -108,7 +153,8 @@
 import { defineComponent, ref, computed } from 'vue';
 import { useChatStore, type Session } from 'src/stores/chatStore';
 import { useSettingsStore } from 'src/stores/settingsStore';
-import { syncState } from 'src/services/syncService';
+import { syncService, syncState } from 'src/services/syncService';
+import { googleDriveProvider } from 'src/services/googleDriveProvider';
 import SettingsDialog from 'src/components/SettingsDialog.vue';
 
 const pkg = require('../../package.json');
@@ -124,6 +170,7 @@ export default defineComponent({
         const renameId = ref<string | null>(null);
         const renameTitle = ref('');
         const showSettings = ref(false);
+        const confirmPull = ref(false);
 
         const appVersion: string = pkg.version;
 
@@ -185,6 +232,57 @@ export default defineComponent({
             emit('session-selected');
         }
 
+        async function handleSignIn() {
+            try {
+                await googleDriveProvider.signIn();
+                syncService.updateAuthState();
+            } catch (err) {
+                syncState.syncError.value = err instanceof Error ? err.message : 'Sign in failed';
+            }
+        }
+
+        async function handleSyncNow() {
+            await syncService.pushAll(
+                () => store.sessions,
+                (sessionId: string) => {
+                    if (sessionId === store.currentSessionId) {
+                        return store.messages;
+                    }
+                    return [];
+                },
+                () => settingsStore.userFacts,
+                () => appVersion,
+            );
+        }
+
+        async function handlePull() {
+            confirmPull.value = false;
+            try {
+                await syncService.pullAll(
+                    () => store.sessions,
+                    (sessionId: string) => {
+                        if (sessionId === store.currentSessionId) {
+                            return store.messages;
+                        }
+                        return [];
+                    },
+                    (sessions) => {
+                        store.sessions.splice(0, store.sessions.length, ...sessions);
+                    },
+                    (sessionId, messages) => {
+                        if (sessionId === store.currentSessionId) {
+                            store.messages.splice(0, store.messages.length, ...messages);
+                        }
+                    },
+                    (facts) => {
+                        settingsStore.saveUserFacts(facts);
+                    },
+                );
+            } catch (err) {
+                // Error is already set in syncState
+            }
+        }
+
         return {
             store,
             settingsStore,
@@ -201,6 +299,10 @@ export default defineComponent({
             confirmRename,
             selectChat,
             newChat,
+            confirmPull,
+            handleSignIn,
+            handleSyncNow,
+            handlePull,
         };
     },
 });

@@ -800,6 +800,57 @@ body.body--dark .chatgpt-search-meta .q-icon {
   opacity: 0;
 }
 
+/* ---- TTS control bar ---- */
+.chatgpt-tts-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chatgpt-tts-bar .q-slider {
+  margin: 0 4px;
+}
+
+/* Slide-up transition for TTS bar */
+.slide-up-enter-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.slide-up-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+/* ---- Sync notification banner ---- */
+.chatgpt-sync-notification {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.chatgpt-sync-notification.positive {
+  background: #16a34a;
+  color: white;
+}
+
+.chatgpt-sync-notification.negative {
+  background: #dc2626;
+  color: white;
+}
+
 /* ---- File attachment chips (in ChatInput & ChatPage) ---- */
 .chatgpt-file-chips {
   display: flex;

@@ -30,9 +30,9 @@
 
             <!-- Sync buttons -->
             <div class="row q-gutter-sm q-mt-sm">
-                <q-btn outline color="primary" icon="cloud_upload" label="Sync Now" :disable="isSyncing"
+                <q-btn outline color="primary" icon="cloud_upload" label="Upload" :disable="isSyncing"
                     :loading="isSyncing" @click="handleSyncNow" />
-                <q-btn outline color="warning" icon="cloud_download" label="Sync from Drive" :disable="isSyncing"
+                <q-btn outline color="warning" icon="cloud_download" label="Download" :disable="isSyncing"
                     @click="confirmPull = true" />
             </div>
 
@@ -51,7 +51,7 @@
                 <q-card-section class="row items-center">
                     <q-icon name="warning" color="warning" size="md" class="q-mr-md" />
                     <div>
-                        <div class="text-h6">Sync from Drive?</div>
+                        <div class="text-h6">Download from Drive?</div>
                         <div class="text-caption text-grey-7">
                             This will <strong>replace all local data</strong> with the data from Google Drive.
                             Current local changes that haven't been synced will be lost.
@@ -60,7 +60,7 @@
                 </q-card-section>
                 <q-card-actions align="right">
                     <q-btn flat label="Cancel" v-close-popup />
-                    <q-btn flat label="Replace & Sync" color="warning" :loading="isSyncing" @click="handlePull" />
+                    <q-btn flat label="Download & Replace" color="warning" :loading="isSyncing" @click="handlePull" />
                 </q-card-actions>
             </q-card>
         </q-dialog>

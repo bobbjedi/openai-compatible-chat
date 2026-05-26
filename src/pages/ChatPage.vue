@@ -260,6 +260,11 @@ export default defineComponent({
 
         onMounted(async () => {
             await store.init();
+            // Scroll to bottom after loading messages
+            void nextTick().then(() => {
+                const el = scrollRef.value;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
         });
 
         function formatTime(ts: number): string {

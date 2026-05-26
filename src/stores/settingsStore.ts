@@ -54,6 +54,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const darkMode = ref(loadDarkMode());
   const googleDriveEnabled = ref(false);
   const googleDriveEmail = ref('');
+  const ttsRate = ref(1.0);
 
   // Apply theme immediately on store init
   Dark.set(darkMode.value);
@@ -64,7 +65,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (loaded) return;
     const [
       ep, key, mdl, smdl, tkl, facts,
-      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail,
+      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail, tts,
     ] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
@@ -78,6 +79,7 @@ export const useSettingsStore = defineStore('settings', () => {
       getSetting('visionModel'),
       getSetting('googleDriveEnabled'),
       getSetting('googleDriveEmail'),
+      getSetting('ttsRate'),
     ]);
     if (ep) endpoint.value = ep;
     if (key) apiKey.value = key;
@@ -90,6 +92,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (vMdl) visionModel.value = vMdl;
     if (gdEnb) googleDriveEnabled.value = gdEnb === 'true';
     if (gdEmail) googleDriveEmail.value = gdEmail;
+    if (tts) ttsRate.value = parseFloat(tts) || 1.0;
     userFacts.value = deserializeFacts(facts);
     loaded = true;
   }
@@ -169,6 +172,11 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('googleDriveEmail', val);
   }
 
+  async function saveTtsRate(val: number) {
+    ttsRate.value = val;
+    await putSetting('ttsRate', String(val));
+  }
+
   function toggleDarkMode() {
     darkMode.value = !darkMode.value;
     Dark.set(darkMode.value);
@@ -189,6 +197,7 @@ export const useSettingsStore = defineStore('settings', () => {
     darkMode,
     googleDriveEnabled,
     googleDriveEmail,
+    ttsRate,
     load,
     saveEndpoint,
     saveApiKey,
@@ -202,6 +211,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveVisionModel,
     saveGoogleDriveEnabled,
     saveGoogleDriveEmail,
+    saveTtsRate,
     addFact,
     removeFact,
     toggleDarkMode,

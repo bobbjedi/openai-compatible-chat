@@ -209,6 +209,12 @@ After you respond with the JSON, you will receive search results. Then give the 
     currentSessionId.value = id;
     error.value = null;
     messages.value = await getMessages(id);
+    // Save last active session
+    try {
+      localStorage.setItem('chatgpt-last-session', id);
+    } catch {
+      // ignore
+    }
   }
 
   async function createSession(title?: string): Promise<string> {
@@ -894,7 +900,13 @@ ${dialogueText}`;
   async function init() {
     await loadSessions();
     if (sessions.value.length > 0) {
-      await selectSession(sessions.value[0].id);
+      // Try to restore last active session
+      const lastId = localStorage.getItem('chatgpt-last-session');
+      if (lastId && sessions.value.some((s) => s.id === lastId)) {
+        await selectSession(lastId);
+      } else {
+        await selectSession(sessions.value[0].id);
+      }
     }
   }
 

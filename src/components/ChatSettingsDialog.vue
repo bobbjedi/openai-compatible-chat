@@ -45,9 +45,9 @@
                 <div class="text-subtitle2 text-grey-8 q-mb-xs">Google Drive Sync</div>
                 <template v-if="syncState.isSignedIn">
                     <div class="row q-gutter-sm">
-                        <q-btn outline dense size="sm" color="primary" icon="cloud_upload" label="Sync this chat"
+                        <q-btn outline dense size="sm" color="primary" icon="cloud_upload" label="Upload"
                             :loading="syncingChat" :disable="!store.currentSessionId" @click="syncCurrentChat" />
-                        <q-btn outline dense size="sm" color="warning" icon="cloud_download" label="Load this chat"
+                        <q-btn outline dense size="sm" color="warning" icon="cloud_download" label="Download"
                             :loading="loadingChat" :disable="!store.currentSessionId" @click="loadCurrentChat" />
                     </div>
                     <div v-if="lastSyncTime" class="text-caption text-grey-6 q-mt-xs">
