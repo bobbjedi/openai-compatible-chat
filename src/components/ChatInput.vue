@@ -128,13 +128,15 @@ export default defineComponent({
             recognition.lang = isRu ? 'ru-RU' : 'en-US';
 
             recognition.onresult = (event: any) => {
-                let result = '';
-                for (let i = event.resultIndex; i < event.results.length; i += 1) {
-                    result += event.results[i][0].transcript;
+                // Берем только последний финальный результат
+                const lastResult = event.results[event.results.length - 1];
+                if (lastResult?.isFinal) {
+                    const { transcript } = lastResult[0];
+                    text.value = text.value.trim()
+                        ? `${text.value.trim()} ${transcript}`
+                        : transcript;
                 }
-                if (event.results[event.resultIndex]?.isFinal) {
-                    text.value += ` ${result} `;
-                }
+                // Промежуточные результаты игнорируем полностью
             };
 
             recognition.onerror = (event: any) => {
