@@ -773,6 +773,33 @@ body.body--dark .chatgpt-search-meta .q-icon {
   color: #22c55e;
 }
 
+/* ---- Scroll to bottom button ---- */
+.chatgpt-scroll-btn {
+  position: sticky;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.chatgpt-scroll-btn:hover {
+  opacity: 1;
+}
+
+/* Fade transition for scroll button */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 /* ---- File attachment chips (in ChatInput & ChatPage) ---- */
 .chatgpt-file-chips {
   display: flex;

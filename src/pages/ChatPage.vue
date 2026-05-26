@@ -55,7 +55,7 @@
         </div>
 
         <!-- Messages -->
-        <div ref="scrollRef" class="chatgpt-messages">
+        <div ref="scrollRef" class="chatgpt-messages" @scroll="onScroll">
             <div v-if="store.displayMessages.length === 0
                 && !store.isStreaming" class="chatgpt-welcome">
                 <div class="chatgpt-welcome-logo">
@@ -190,6 +190,12 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Scroll to bottom button — appears when user scrolls up -->
+            <transition name="fade">
+                <q-btn v-if="showScrollBtn" round dense color="grey-6" text-color="white" icon="keyboard_arrow_down"
+                    size="sm" class="chatgpt-scroll-btn" @click="scrollToBottom" />
+            </transition>
         </div>
 
         <!-- Input -->
@@ -283,9 +289,19 @@ export default defineComponent({
             return dist < SCROLL_THRESHOLD;
         }
 
+        const showScrollBtn = ref(false);
+
         function scrollToBottom() {
             const el = scrollRef.value;
             if (el) el.scrollTop = el.scrollHeight;
+        }
+
+        // Track scroll position to show/hide scroll button
+        function onScroll() {
+            const el = scrollRef.value;
+            if (!el) return;
+            const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+            showScrollBtn.value = dist > 40;
         }
 
         // Срабатывает при добавлении нового сообщения
@@ -295,6 +311,7 @@ export default defineComponent({
                 void nextTick().then(() => {
                     if (isNearBottom()) {
                         scrollToBottom();
+                        showScrollBtn.value = false;
                     }
                 });
             },
@@ -310,6 +327,7 @@ export default defineComponent({
                 void nextTick().then(() => {
                     if (isNearBottom()) {
                         scrollToBottom();
+                        showScrollBtn.value = false;
                     }
                 });
             },
@@ -395,6 +413,9 @@ export default defineComponent({
             scrollRef,
             renderMarkdown,
             formatTime,
+            showScrollBtn,
+            scrollToBottom,
+            onScroll,
             editingId,
             editText,
             copyMessage,
