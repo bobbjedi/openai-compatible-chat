@@ -143,14 +143,23 @@ function startListening() {
     recognition.onresult = function onResult(event: any) {
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         if (event.results[i].isFinal) {
-          accumulatedText += event.results[i][0].transcript;
+          const newText = event.results[i][0].transcript.trim();
+          // Dedup: skip if new text is already at the end of accumulated text
+          if (newText && !accumulatedText.endsWith(newText)
+            && !accumulatedText.endsWith(newText.toLowerCase())) {
+            accumulatedText += newText;
+          }
         }
       }
 
       let fullText = accumulatedText;
       const lastResult = event.results[event.results.length - 1];
       if (!lastResult.isFinal) {
-        fullText += lastResult[0].transcript;
+        const interim = lastResult[0].transcript.trim();
+        // Only show interim if it's not already in accumulated
+        if (interim && !accumulatedText.endsWith(interim)) {
+          fullText += interim;
+        }
       }
       voiceState.transcript.value = fullText;
 
