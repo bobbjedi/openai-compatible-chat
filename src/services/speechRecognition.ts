@@ -3,8 +3,9 @@
  * Используется в ChatInput.vue (надиктовка) и voiceModeService.ts (Voice Mode).
  *
  * Особенности:
- * - continuous: true — непрерывное распознавание, микрофон не глохнет после фразы
- * - НЕТ авто-рестарта — вызывающий код сам решает, когда запускать/останавливать
+ * - continuous: true на десктопе, false на мобильных (Samsung Chrome дублирует фразы)
+ * - На мобильных: авто-рестарт через onEnd для непрерывной работы
+ * - На десктопе: без авто-рестарта, управление через voiceModeService
  * - Колбэки: onResult(text), onInterim(text), onEnd(), onError(error)
  */
 
@@ -16,13 +17,19 @@
 export interface SpeechRecognitionCallbacks {
   onResult?: (text: string) => void;
   onInterim?: (text: string) => void;
-  onEnd?: () => void;
+  onEnd?: (wasStopped: boolean) => void;
   onError?: (error: string) => void;
 }
 
 let recognition: any = null;
 let isActive = false;
 let savedCallbacks: SpeechRecognitionCallbacks | null = null;
+// eslint-disable-next-line prefer-const
+let wasStopped = false;
+
+const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(
+  typeof navigator !== 'undefined' ? navigator.userAgent : '',
+);
 
 function getLang(): string {
   const langs = navigator.languages?.length
@@ -52,7 +59,8 @@ function startInternal(): void {
   }
 
   recognition = new SpeechRecognitionAPI();
-  recognition.continuous = true;
+  // Mobile browsers (Samsung Chrome) duplicate phrases with continuous: true
+  recognition.continuous = !isMobile;
   recognition.interimResults = true;
   recognition.lang = getLang();
 
@@ -77,8 +85,9 @@ function startInternal(): void {
   };
 
   recognition.onend = () => {
-    callbacks.onEnd?.();
+    callbacks.onEnd?.(wasStopped);
     isActive = false;
+    wasStopped = false;
   };
 
   try {
@@ -99,13 +108,14 @@ export const speechRecognition = {
     }
     savedCallbacks = callbacks;
     // eslint-disable-next-line no-console
-    console.log('[speechRecognition] start()');
+    console.log('[speechRecognition] start() continuous=', !isMobile);
     startInternal();
   },
 
   stop(): void {
     // eslint-disable-next-line no-console
     console.log('[speechRecognition] stop()');
+    wasStopped = true;
     stopInternal();
     savedCallbacks = null;
   },

@@ -15,7 +15,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable no-use-before-define */
 
-import { ref, type Ref } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 import { useChatStore } from 'src/stores/chatStore';
 import { useSettingsStore } from 'src/stores/settingsStore';
 import { speechRecognition } from './speechRecognition';
@@ -24,8 +24,15 @@ import { speechRecognition } from './speechRecognition';
 
 export type VoiceModeState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
+const isActiveRef = ref(false) as Ref<boolean>;
+// Log changes to isActive for debugging
+watch(isActiveRef, (val: boolean) => {
+  // eslint-disable-next-line no-console
+  console.log('[VoiceMode] isActive changed to', val);
+});
+
 export const voiceState = {
-  isActive: ref(false) as Ref<boolean>,
+  isActive: isActiveRef,
   state: ref<VoiceModeState>('idle') as Ref<VoiceModeState>,
   transcript: ref('') as Ref<string>,
   reasoning: ref('') as Ref<string>,
@@ -65,6 +72,8 @@ function playBeep(freq = 880, duration = 0.15) {
 // --- Вспомогательные функции (объявлены до startListening) ---
 
 function stopVoiceMode() {
+  // eslint-disable-next-line no-console
+  console.log('[VoiceMode] stopVoiceMode() called, state=', voiceState.state.value);
   voiceState.isActive.value = false;
   voiceState.state.value = 'idle';
   voiceState.transcript.value = '';
@@ -188,11 +197,18 @@ function startListening() {
       }
     },
     onError() {
-      stopVoiceMode();
+      // Don't stop Voice Mode on recognition error — just retry
+      // eslint-disable-next-line no-console
+      console.log('[VoiceMode] recognition error, retrying...');
+      if (voiceState.isActive.value && !isProcessing) {
+        setTimeout(startListening, 500);
+      }
     },
-    onEnd() {
-      // continuous: true — onEnd fires only on explicit stop() or error
-      // Voice Mode controls lifecycle via start()/stop()/resumeListening()
+    onEnd(wasStopped: boolean) {
+      // Restart only if not explicitly stopped and not processing a send
+      if (!wasStopped && voiceState.isActive.value && !isProcessing) {
+        startListening();
+      }
     },
   });
 

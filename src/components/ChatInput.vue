@@ -119,7 +119,7 @@ export default defineComponent({
                 onError() {
                     isListening.value = false;
                 },
-                onEnd() {
+                onEnd(_wasStopped: boolean) {
                     // Restart listening for continuous dictation
                     if (isListening.value) {
                         startDictation();
