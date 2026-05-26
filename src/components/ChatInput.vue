@@ -109,6 +109,25 @@ export default defineComponent({
             pendingFiles.value.splice(index, 1);
         }
 
+        function startDictation() {
+            speechRecognition.start({
+                onResult(transcript: string) {
+                    text.value = text.value.trim()
+                        ? `${text.value.trim()} ${transcript}`
+                        : transcript;
+                },
+                onError() {
+                    isListening.value = false;
+                },
+                onEnd() {
+                    // Restart listening for continuous dictation
+                    if (isListening.value) {
+                        startDictation();
+                    }
+                },
+            });
+        }
+
         function toggleListening() {
             if (store.isStreaming) return;
             if (isListening.value) {
@@ -116,19 +135,7 @@ export default defineComponent({
                 isListening.value = false;
             } else {
                 isListening.value = true;
-                speechRecognition.start({
-                    onResult(transcript: string) {
-                        text.value = text.value.trim()
-                            ? `${text.value.trim()} ${transcript}`
-                            : transcript;
-                    },
-                    onError() {
-                        isListening.value = false;
-                    },
-                    onEnd() {
-                        // speechRecognition auto-restarts, nothing to do here
-                    },
-                });
+                startDictation();
             }
         }
 

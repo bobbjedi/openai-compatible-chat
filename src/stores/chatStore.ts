@@ -644,7 +644,7 @@ ${dialogueText}`;
 
   async function sendMessage(text: string, parsedFiles?: ParseResult[]) {
     // eslint-disable-next-line no-console
-    console.log('[chatStore] sendMessage: text="', text, '" parsedFiles=', parsedFiles?.map((f) => ({ name: f.name, len: f.text.length })));
+    console.log('[chatStore] sendMessage: ts=', Date.now(), 'text="', text, '" parsedFiles=', parsedFiles?.map((f) => ({ name: f.name, len: f.text.length })));
     const settings = useSettingsStore();
     await settings.load();
 

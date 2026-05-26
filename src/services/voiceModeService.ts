@@ -17,6 +17,7 @@
 
 import { ref, type Ref } from 'vue';
 import { useChatStore } from 'src/stores/chatStore';
+import { useSettingsStore } from 'src/stores/settingsStore';
 import { speechRecognition } from './speechRecognition';
 
 // --- Состояние ---
@@ -37,6 +38,8 @@ export const voiceState = {
 let silenceTimer: ReturnType<typeof setTimeout> | null = null;
 let isProcessing = false;
 let accumulatedText = '';
+// eslint-disable-next-line prefer-const
+let lastResultTime = 0;
 
 // --- Beep generator ---
 
@@ -78,6 +81,10 @@ function stopVoiceMode() {
 }
 
 function onSilenceTimeout() {
+  const now = Date.now();
+  const elapsed = now - lastResultTime;
+  // eslint-disable-next-line no-console
+  console.log('[VoiceMode] onSilenceTimeout fired, ts=', now, 'silenceDelay=', voiceState.silenceDelay.value, 'elapsed=', elapsed, 'ms, lastResultTs=', lastResultTime, 'accumulatedText="', accumulatedText, '" isProcessing=', isProcessing);
   // Aggressive dedup: remove any word that appears more than once consecutively
   const rawText = accumulatedText.trim();
   if (!rawText || isProcessing) return;
@@ -124,14 +131,17 @@ function onSilenceTimeout() {
   const msgText = text;
   accumulatedText = '';
 
+  // eslint-disable-next-line no-console
+  console.log('[VoiceMode] sending message, mic should be off');
+
   chatStore.sendMessage(msgText).then(() => {
     voiceState.state.value = 'speaking';
-    isProcessing = false;
   }).catch(() => {
-    isProcessing = false;
     if (voiceState.isActive.value) {
       voiceState.state.value = 'listening';
     }
+  }).finally(() => {
+    isProcessing = false;
   });
 }
 
@@ -145,24 +155,44 @@ function startListening() {
   speechRecognition.start({
     onResult(text: string) {
       if (isProcessing) return;
-      accumulatedText = text;
-      voiceState.transcript.value = text;
+      // Build new accumulated text
+      const newText = accumulatedText
+        ? `${accumulatedText} ${text}`
+        : text;
+      // Only reset timer if text actually grew (new content from API)
+      if (newText !== accumulatedText) {
+        accumulatedText = newText;
+        voiceState.transcript.value = accumulatedText;
+        lastResultTime = Date.now();
 
-      if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(onSilenceTimeout, voiceState.silenceDelay.value);
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(onSilenceTimeout, voiceState.silenceDelay.value);
+        // eslint-disable-next-line no-console
+        console.log('[VoiceMode] onResult — new content, timer reset, ts=', lastResultTime, 'silenceDelay=', voiceState.silenceDelay.value, 'accumulatedText="', accumulatedText, '"');
+      } else {
+        // eslint-disable-next-line no-console
+        console.log('[VoiceMode] onResult — duplicate, no reset, ts=', Date.now(), 'text="', text, '"');
+      }
     },
     onInterim(text: string) {
       if (!isProcessing) {
-        voiceState.transcript.value = text;
+        voiceState.transcript.value = accumulatedText
+          ? `${accumulatedText} ${text}`
+          : text;
+        // Reset silence timer on interim results too — user is still speaking
+        lastResultTime = Date.now();
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(onSilenceTimeout, voiceState.silenceDelay.value);
+        // eslint-disable-next-line no-console
+        console.log('[VoiceMode] onInterim — timer reset, ts=', lastResultTime, 'interim="', text, '"');
       }
     },
     onError() {
       stopVoiceMode();
     },
     onEnd() {
-      if (voiceState.isActive.value && !isProcessing) {
-        setTimeout(startListening, 300);
-      }
+      // continuous: true — onEnd fires only on explicit stop() or error
+      // Voice Mode controls lifecycle via start()/stop()/resumeListening()
     },
   });
 
@@ -204,6 +234,11 @@ export const voiceModeService = {
   start() {
     if (voiceState.isActive.value) return;
 
+    // Apply settings from store on start
+    const settings = useSettingsStore();
+    voiceState.silenceDelay.value = settings.voiceSilenceDelay;
+    voiceState.ttsRate.value = settings.ttsRate;
+
     voiceState.isActive.value = true;
     voiceState.state.value = 'listening';
     voiceState.transcript.value = '';
@@ -219,12 +254,16 @@ export const voiceModeService = {
   async speakResponse(text: string) {
     if (!voiceState.isActive.value) return;
 
+    // Stop microphone before speaking
+    speechRecognition.stop();
     voiceState.state.value = 'speaking';
     await speakText(text);
 
     if (voiceState.isActive.value) {
       accumulatedText = '';
       voiceState.state.value = 'listening';
+      // Wait for sound to fade before re-enabling mic
+      await new Promise((r) => { setTimeout(r, 500); });
       startListening();
     }
   },

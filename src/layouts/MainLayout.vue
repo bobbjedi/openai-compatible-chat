@@ -12,7 +12,7 @@
           <q-menu v-if="isSpeaking" anchor="bottom end" self="top end" auto-close>
             <q-list dense style="min-width: 200px">
               <q-item-label header class="text-caption text-grey-7">Speed: {{ Math.round(settingsStore.ttsRate * 100)
-              }}%</q-item-label>
+                }}%</q-item-label>
               <q-item>
                 <q-item-section>
                   <div class="row items-center q-gutter-xs">
@@ -197,27 +197,8 @@ export default defineComponent({
           }
         }
         if (lastContent) {
-          voiceState.state.value = 'speaking';
-          const cleanText = sanitizeForTts(lastContent);
-          if (cleanText) {
-            const utterance = new SpeechSynthesisUtterance(cleanText);
-            utterance.lang = 'ru-RU';
-            utterance.rate = settingsStore.ttsRate;
-            utterance.pitch = 1.0;
-            utterance.onend = () => {
-              if (voiceState.isActive.value) {
-                voiceState.state.value = 'listening';
-                voiceModeService.resumeListening();
-              }
-            };
-            utterance.onerror = () => {
-              if (voiceState.isActive.value) {
-                voiceState.state.value = 'listening';
-                voiceModeService.resumeListening();
-              }
-            };
-            window.speechSynthesis.speak(utterance);
-          }
+          // Delegate TTS to voiceModeService to avoid double-speaking
+          voiceModeService.speakResponse(lastContent);
         } else {
           voiceState.state.value = 'listening';
         }

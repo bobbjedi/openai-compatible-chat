@@ -3,8 +3,8 @@
  * Используется в ChatInput.vue (надиктовка) и voiceModeService.ts (Voice Mode).
  *
  * Особенности:
- * - continuous: false — без накопления, каждый финальный результат — отдельная фраза
- * - Авто-рестарт после onend для непрерывной работы
+ * - continuous: true — непрерывное распознавание, микрофон не глохнет после фразы
+ * - НЕТ авто-рестарта — вызывающий код сам решает, когда запускать/останавливать
  * - Колбэки: onResult(text), onInterim(text), onEnd(), onError(error)
  */
 
@@ -22,7 +22,6 @@ export interface SpeechRecognitionCallbacks {
 
 let recognition: any = null;
 let isActive = false;
-let shouldRestart = false;
 let savedCallbacks: SpeechRecognitionCallbacks | null = null;
 
 function getLang(): string {
@@ -53,7 +52,7 @@ function startInternal(): void {
   }
 
   recognition = new SpeechRecognitionAPI();
-  recognition.continuous = false;
+  recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = getLang();
 
@@ -79,12 +78,7 @@ function startInternal(): void {
 
   recognition.onend = () => {
     callbacks.onEnd?.();
-    if (isActive || shouldRestart) {
-      shouldRestart = false;
-      setTimeout(startInternal, 300);
-    } else {
-      isActive = false;
-    }
+    isActive = false;
   };
 
   try {
@@ -104,12 +98,14 @@ export const speechRecognition = {
       return;
     }
     savedCallbacks = callbacks;
+    // eslint-disable-next-line no-console
+    console.log('[speechRecognition] start()');
     startInternal();
   },
 
   stop(): void {
-    isActive = false;
-    shouldRestart = false;
+    // eslint-disable-next-line no-console
+    console.log('[speechRecognition] stop()');
     stopInternal();
     savedCallbacks = null;
   },
