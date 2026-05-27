@@ -91,6 +91,7 @@ import {
     defineComponent, ref, computed, watch, onMounted, nextTick,
 } from 'vue';
 import { stepVoiceState, stepVoiceService } from 'src/services/stepVoiceService';
+import { speechRecognition } from 'src/services/speechRecognition';
 import { useSettingsStore } from 'src/stores/settingsStore';
 
 export default defineComponent({
@@ -188,8 +189,9 @@ export default defineComponent({
                     stepVoiceService.send();
                     break;
                 case 'speaking':
-                    // Stop TTS, clear queue, return to listening
+                    // Stop TTS, restart mic fresh
                     stepVoiceService.stopSpeaking();
+                    speechRecognition.stop();
                     stepVoiceState.state.value = 'listening';
                     stepVoiceService.startListening();
                     break;

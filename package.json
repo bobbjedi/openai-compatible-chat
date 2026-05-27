@@ -1,6 +1,6 @@
 {
   "name": "chat",
-  "version": "0.8.0",
+  "version": "0.8.2",
   "description": "ChatLLM-like SPA for any OpenAI-compatible API. Voice input, rolling summaries, user facts.",
   "productName": "Simple LLM Chat",
   "author": "bobbjedi <bobbrownjedi@gmail.com>",

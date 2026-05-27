@@ -40,7 +40,7 @@ function getLang(): string {
 }
 
 function stopInternal(): void {
-  if (recognition && isActive) {
+  if (recognition) {
     try { recognition.stop(); } catch { /* ignore */ }
   }
   recognition = null;
