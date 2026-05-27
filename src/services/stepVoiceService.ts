@@ -125,7 +125,7 @@ async function doSend(text: string) {
   if (!text) return;
   speechRecognition.stop();
   // Low beep — "processing"
-  playBeep(440, 0.2);
+  playBeep(440, 0.3);
   stepVoiceState.state.value = 'thinking';
   accumulatedText = '';
 
@@ -159,7 +159,7 @@ async function doSend(text: string) {
   stepVoiceState.transcript.value = '';
   stepVoiceState.state.value = 'listening';
   // High beep — "you can speak now"
-  playBeep(1100, 0.1);
+  playBeep(1100, 0.3);
   speechRecognition.start(makeCallbacks());
 }
 
@@ -192,7 +192,7 @@ export const stepVoiceService = {
     stepVoiceState.transcript.value = '';
     stepVoiceState.state.value = 'listening';
     // High beep — "you can speak now"
-    playBeep(1100, 0.1);
+    playBeep(1100, 0.3);
     speechRecognition.start(makeCallbacks());
   },
 
