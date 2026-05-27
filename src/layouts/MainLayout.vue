@@ -33,6 +33,10 @@
             </q-list>
           </q-menu>
         </q-btn>
+        <q-btn flat dense round icon="record_voice_over" :color="stepVoiceState.isActive.value ? 'positive' : ''"
+          @click="toggleStepVoice">
+          <q-tooltip>{{ stepVoiceState.isActive.value ? 'Step Voice Active' : 'Step Voice' }}</q-tooltip>
+        </q-btn>
         <q-btn flat dense round :icon="voiceState.isActive.value ? 'mic' : 'mic_none'"
           :color="voiceState.isActive.value ? 'negative' : ''" @click="toggleVoiceMode">
           <q-tooltip>{{ voiceState.isActive.value ? 'Voice Mode Active' : 'Voice Mode' }}</q-tooltip>
@@ -78,6 +82,9 @@
         </div>
       </div>
     </transition>
+
+    <!-- Step Voice Overlay -->
+    <StepVoiceOverlay />
 
     <!-- Voice Mode Overlay -->
     <VoiceModeOverlay />
@@ -151,16 +158,18 @@ import {
 import SessionList from 'src/components/SessionList.vue';
 import ChatSettingsDialog from 'src/components/ChatSettingsDialog.vue';
 import VoiceModeOverlay from 'src/components/VoiceModeOverlay.vue';
+import StepVoiceOverlay from 'src/components/StepVoiceOverlay.vue';
 import { useSettingsStore } from 'src/stores/settingsStore';
 import { useChatStore } from 'src/stores/chatStore';
 import { syncState } from 'src/services/syncService';
 import { voiceState, voiceModeService } from 'src/services/voiceModeService';
+import { stepVoiceState, stepVoiceService } from 'src/services/stepVoiceService';
 import { sanitizeForTts } from 'src/services/ttsSanitizer';
 
 export default defineComponent({
   name: 'MainLayout',
   components: {
-    SessionList, ChatSettingsDialog, VoiceModeOverlay,
+    SessionList, ChatSettingsDialog, VoiceModeOverlay, StepVoiceOverlay,
   },
   setup() {
     const chatStore = useChatStore();
@@ -210,6 +219,14 @@ export default defineComponent({
         voiceModeService.stop();
       } else {
         voiceModeService.start();
+      }
+    }
+
+    function toggleStepVoice() {
+      if (stepVoiceState.isActive.value) {
+        stepVoiceService.stop();
+      } else {
+        stepVoiceService.start();
       }
     }
     let notifTimer: ReturnType<typeof setTimeout> | null = null;
@@ -338,7 +355,9 @@ export default defineComponent({
       toggleTts,
       syncNotification,
       voiceState,
+      stepVoiceState,
       toggleVoiceMode,
+      toggleStepVoice,
       onSessionSelected,
     };
   },

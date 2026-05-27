@@ -56,6 +56,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const googleDriveEmail = ref('');
   const ttsRate = ref(1.0);
   const voiceSilenceDelay = ref(1500);
+  const stepVoiceTimeout = ref(3000);
 
   // Apply theme immediately on store init
   Dark.set(darkMode.value);
@@ -66,7 +67,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (loaded) return;
     const [
       ep, key, mdl, smdl, tkl, facts,
-      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail, tts, vsDel,
+      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail, tts, vsDel, svt,
     ] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
@@ -82,6 +83,7 @@ export const useSettingsStore = defineStore('settings', () => {
       getSetting('googleDriveEmail'),
       getSetting('ttsRate'),
       getSetting('voiceSilenceDelay'),
+      getSetting('stepVoiceTimeout'),
     ]);
     if (ep) endpoint.value = ep;
     if (key) apiKey.value = key;
@@ -96,6 +98,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (gdEmail) googleDriveEmail.value = gdEmail;
     if (tts) ttsRate.value = parseFloat(tts) || 1.0;
     if (vsDel) voiceSilenceDelay.value = parseInt(vsDel, 10) || 1500;
+    if (svt) stepVoiceTimeout.value = parseInt(svt, 10) || 3000;
     userFacts.value = deserializeFacts(facts);
     loaded = true;
   }
@@ -185,6 +188,11 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('voiceSilenceDelay', String(val));
   }
 
+  async function saveStepVoiceTimeout(val: number) {
+    stepVoiceTimeout.value = val;
+    await putSetting('stepVoiceTimeout', String(val));
+  }
+
   function toggleDarkMode() {
     darkMode.value = !darkMode.value;
     Dark.set(darkMode.value);
@@ -207,6 +215,7 @@ export const useSettingsStore = defineStore('settings', () => {
     googleDriveEmail,
     ttsRate,
     voiceSilenceDelay,
+    stepVoiceTimeout,
     load,
     saveEndpoint,
     saveApiKey,
@@ -222,6 +231,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveGoogleDriveEmail,
     saveTtsRate,
     saveVoiceSilenceDelay,
+    saveStepVoiceTimeout,
     addFact,
     removeFact,
     toggleDarkMode,
