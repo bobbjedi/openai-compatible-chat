@@ -28,6 +28,27 @@ let accumulatedText = '';
 // eslint-disable-next-line prefer-const
 let autoSendTimer: ReturnType<typeof setTimeout> | null = null;
 
+// --- Beep generator ---
+
+function playBeep(freq = 880, duration = 0.15) {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch {
+    // AudioContext not available
+  }
+}
+
 // --- TTS ---
 
 function speakText(text: string): Promise<void> {
@@ -103,6 +124,8 @@ function makeCallbacks() {
 async function doSend(text: string) {
   if (!text) return;
   speechRecognition.stop();
+  // Low beep — "processing"
+  playBeep(440, 0.2);
   stepVoiceState.state.value = 'thinking';
   accumulatedText = '';
 
@@ -114,7 +137,7 @@ async function doSend(text: string) {
     await chatStore.createSession(text.slice(0, 50));
   }
 
-  await chatStore.sendMessage(text);
+  await chatStore.sendMessage(`[Voice] ${text}`);
 
   const msgs = chatStore.messages;
   let lastContent = '';
@@ -135,6 +158,8 @@ async function doSend(text: string) {
   accumulatedText = '';
   stepVoiceState.transcript.value = '';
   stepVoiceState.state.value = 'listening';
+  // High beep — "you can speak now"
+  playBeep(1100, 0.1);
   speechRecognition.start(makeCallbacks());
 }
 
@@ -166,6 +191,8 @@ export const stepVoiceService = {
     accumulatedText = '';
     stepVoiceState.transcript.value = '';
     stepVoiceState.state.value = 'listening';
+    // High beep — "you can speak now"
+    playBeep(1100, 0.1);
     speechRecognition.start(makeCallbacks());
   },
 
