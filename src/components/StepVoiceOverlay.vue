@@ -188,9 +188,10 @@ export default defineComponent({
                     stepVoiceService.send();
                     break;
                 case 'speaking':
-                    // Stop TTS and return to idle
-                    window.speechSynthesis.cancel();
-                    stepVoiceState.state.value = 'idle';
+                    // Stop TTS, clear queue, return to listening
+                    stepVoiceService.stopSpeaking();
+                    stepVoiceState.state.value = 'listening';
+                    stepVoiceService.startListening();
                     break;
                 case 'thinking':
                     // Do nothing

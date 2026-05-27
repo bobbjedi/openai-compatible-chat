@@ -1,4 +1,4 @@
-<template>
+м<template>
   <q-layout view="lHh Lpr lFf" class="chatgpt-layout">
     <q-header class="chatgpt-header" elevated>
       <q-toolbar class="text-subtitle2">
@@ -36,10 +36,6 @@
         <q-btn flat dense round icon="record_voice_over" :color="stepVoiceState.isActive.value ? 'positive' : ''"
           @click="toggleStepVoice">
           <q-tooltip>{{ stepVoiceState.isActive.value ? 'Step Voice Active' : 'Step Voice' }}</q-tooltip>
-        </q-btn>
-        <q-btn flat dense round :icon="voiceState.isActive.value ? 'mic' : 'mic_none'"
-          :color="voiceState.isActive.value ? 'negative' : ''" @click="toggleVoiceMode">
-          <q-tooltip>{{ voiceState.isActive.value ? 'Voice Mode Active' : 'Voice Mode' }}</q-tooltip>
         </q-btn>
         <q-btn flat dense round icon="fact_check" @click="showFactsDialog = true">
           <q-tooltip>User Facts</q-tooltip>
@@ -85,9 +81,6 @@
 
     <!-- Step Voice Overlay -->
     <StepVoiceOverlay />
-
-    <!-- Voice Mode Overlay -->
-    <VoiceModeOverlay />
 
     <ChatSettingsDialog v-model="showChatSettings" />
 
@@ -157,19 +150,16 @@ import {
 } from 'vue';
 import SessionList from 'src/components/SessionList.vue';
 import ChatSettingsDialog from 'src/components/ChatSettingsDialog.vue';
-import VoiceModeOverlay from 'src/components/VoiceModeOverlay.vue';
 import StepVoiceOverlay from 'src/components/StepVoiceOverlay.vue';
 import { useSettingsStore } from 'src/stores/settingsStore';
 import { useChatStore } from 'src/stores/chatStore';
 import { syncState } from 'src/services/syncService';
-import { voiceState, voiceModeService } from 'src/services/voiceModeService';
 import { stepVoiceState, stepVoiceService } from 'src/services/stepVoiceService';
-import { sanitizeForTts } from 'src/services/ttsSanitizer';
 
 export default defineComponent({
   name: 'MainLayout',
   components: {
-    SessionList, ChatSettingsDialog, VoiceModeOverlay, StepVoiceOverlay,
+    SessionList, ChatSettingsDialog, StepVoiceOverlay,
   },
   setup() {
     const chatStore = useChatStore();
@@ -182,45 +172,6 @@ export default defineComponent({
     const settingsStore = useSettingsStore();
 
     const syncNotification = ref<{ text: string; icon: string; type: string } | null>(null);
-
-    // Watch reasoning updates → show in Voice Mode overlay
-    watch(() => {
-      const msgs = chatStore.messages;
-      const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
-      return lastAssistant?.reasoning || '';
-    }, (reasoning) => {
-      if (voiceState.isActive.value && reasoning) {
-        voiceModeService.setReasoning(reasoning);
-      }
-    });
-
-    // Watch for streaming end → speak response in Voice Mode
-    watch(() => chatStore.isStreaming, (streaming) => {
-      if (!streaming && voiceState.isActive.value) {
-        const msgs = chatStore.messages;
-        let lastContent = '';
-        for (let i = msgs.length - 1; i >= 0; i -= 1) {
-          if (msgs[i].role === 'assistant' && msgs[i].content) {
-            lastContent = msgs[i].content;
-            break;
-          }
-        }
-        if (lastContent) {
-          // Delegate TTS to voiceModeService to avoid double-speaking
-          voiceModeService.speakResponse(lastContent);
-        } else {
-          voiceState.state.value = 'listening';
-        }
-      }
-    });
-
-    function toggleVoiceMode() {
-      if (voiceState.isActive.value) {
-        voiceModeService.stop();
-      } else {
-        voiceModeService.start();
-      }
-    }
 
     function toggleStepVoice() {
       if (stepVoiceState.isActive.value) {
@@ -312,7 +263,11 @@ export default defineComponent({
       if (!lastAssistant) return;
 
       // Clean markdown for speech
-      const cleanText = sanitizeForTts(lastAssistant);
+      const cleanText = lastAssistant
+        .replace(/[#*_`[\]()>|~]/g, '')
+        .replace(/\n{2,}/g, '. ')
+        .replace(/\n/g, ' ')
+        .trim();
 
       if (!cleanText) return;
 
@@ -354,9 +309,7 @@ export default defineComponent({
       stopTts,
       toggleTts,
       syncNotification,
-      voiceState,
       stepVoiceState,
-      toggleVoiceMode,
       toggleStepVoice,
       onSessionSelected,
     };

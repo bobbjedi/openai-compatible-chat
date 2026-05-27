@@ -55,7 +55,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const googleDriveEnabled = ref(false);
   const googleDriveEmail = ref('');
   const ttsRate = ref(1.0);
-  const voiceSilenceDelay = ref(1500);
   const stepVoiceTimeout = ref(3000);
 
   // Apply theme immediately on store init
@@ -67,7 +66,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (loaded) return;
     const [
       ep, key, mdl, smdl, tkl, facts,
-      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail, tts, vsDel, svt,
+      srchKey, srchEnb, vEnb, vMdl, gdEnb, gdEmail, tts, svt,
     ] = await Promise.all([
       getSetting('endpoint'),
       getSetting('apiKey'),
@@ -82,7 +81,6 @@ export const useSettingsStore = defineStore('settings', () => {
       getSetting('googleDriveEnabled'),
       getSetting('googleDriveEmail'),
       getSetting('ttsRate'),
-      getSetting('voiceSilenceDelay'),
       getSetting('stepVoiceTimeout'),
     ]);
     if (ep) endpoint.value = ep;
@@ -97,7 +95,6 @@ export const useSettingsStore = defineStore('settings', () => {
     if (gdEnb) googleDriveEnabled.value = gdEnb === 'true';
     if (gdEmail) googleDriveEmail.value = gdEmail;
     if (tts) ttsRate.value = parseFloat(tts) || 1.0;
-    if (vsDel) voiceSilenceDelay.value = parseInt(vsDel, 10) || 1500;
     if (svt) stepVoiceTimeout.value = parseInt(svt, 10) || 3000;
     userFacts.value = deserializeFacts(facts);
     loaded = true;
@@ -183,11 +180,6 @@ export const useSettingsStore = defineStore('settings', () => {
     await putSetting('ttsRate', String(val));
   }
 
-  async function saveVoiceSilenceDelay(val: number) {
-    voiceSilenceDelay.value = val;
-    await putSetting('voiceSilenceDelay', String(val));
-  }
-
   async function saveStepVoiceTimeout(val: number) {
     stepVoiceTimeout.value = val;
     await putSetting('stepVoiceTimeout', String(val));
@@ -214,7 +206,6 @@ export const useSettingsStore = defineStore('settings', () => {
     googleDriveEnabled,
     googleDriveEmail,
     ttsRate,
-    voiceSilenceDelay,
     stepVoiceTimeout,
     load,
     saveEndpoint,
@@ -230,7 +221,6 @@ export const useSettingsStore = defineStore('settings', () => {
     saveGoogleDriveEnabled,
     saveGoogleDriveEmail,
     saveTtsRate,
-    saveVoiceSilenceDelay,
     saveStepVoiceTimeout,
     addFact,
     removeFact,
