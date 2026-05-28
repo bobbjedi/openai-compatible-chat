@@ -55,7 +55,7 @@
         </div>
 
         <!-- Messages -->
-        <div ref="scrollRef" class="chatgpt-messages" @scroll="onScroll">
+        <div ref="scrollRef" class="chatgpt-messages" @scroll="onScroll" @click="onMsgClick">
             <div v-if="store.displayMessages.length === 0
                 && !store.isStreaming" class="chatgpt-welcome">
                 <div class="chatgpt-welcome-logo">
@@ -282,7 +282,24 @@ export default defineComponent({
 
         function renderMarkdown(text: string): string {
             const raw = marked.parse(text, { async: false }) as string;
-            return DOMPurify.sanitize(raw);
+
+            // Wrap <pre><code> blocks with a header containing language label + Copy button
+            const wrapped = raw.replace(
+                // eslint-disable-next-line prefer-regex-literals
+                /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g,
+                (_match: string, lang: string, code: string) => {
+                    const langLabel = lang || 'code';
+                    return `<div class="code-block-wrapper">
+<div class="code-block-header">
+<span class="code-block-lang">${langLabel}</span>
+<button class="code-block-copy-btn" type="button">Copy</button>
+</div>
+<pre><code class="language-${langLabel}">${code}</code></pre>
+</div>`;
+                },
+            );
+
+            return DOMPurify.sanitize(wrapped);
         }
 
         const SCROLL_THRESHOLD = 20; // px — порог срабатывания автоскролла
@@ -407,6 +424,18 @@ export default defineComponent({
             void nextTick().then(scrollToBottom);
         }
 
+        function onMsgClick(e: MouseEvent) {
+            const btn = (e.target as HTMLElement).closest('.code-block-copy-btn') as HTMLElement | null;
+            if (!btn) return;
+            const wrapper = btn.closest('.code-block-wrapper') as HTMLElement | null;
+            if (!wrapper) return;
+            const code = wrapper.querySelector('code')?.textContent || '';
+            void navigator.clipboard.writeText(code).then(() => {
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+            });
+        }
+
         function attSize(bytes: number): string {
             if (bytes < 1024) return `${bytes} B`;
             if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -437,6 +466,7 @@ export default defineComponent({
             startEditFactsInline,
             saveFactsInline,
             attSize,
+            onMsgClick,
         };
     },
 });

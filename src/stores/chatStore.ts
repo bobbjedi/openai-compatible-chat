@@ -81,7 +81,11 @@ export const useChatStore = defineStore('chat', () => {
     messagesArr.forEach((m) => {
       if (m.role === 'searchResult') {
         eligible.push({ role: 'user', content: m.content });
-      } else if (m.role === 'user' || (m.role === 'assistant' && m.content !== '')) {
+      } else if (m.role === 'user') {
+        // Prepend date/time info so LLM knows when the message was sent
+        const dateStr = new Date(m.createdAt).toISOString();
+        eligible.push({ role: 'user', content: `[Date: ${dateStr}]\n${m.content}` });
+      } else if (m.role === 'assistant' && m.content !== '') {
         eligible.push({ role: m.role, content: m.content });
       }
     });
@@ -157,9 +161,9 @@ You have access to a web search tool. When you need up-to-date information, resp
 {"search":"your search query here"}
 
 CRITICAL RULES:
-1. Your response MUST be ONLY valid JSON — not a single character before or after the braces.
+1. ABSOLUTELY NO TEXT outside JSON. Not "Okay", not "Let me search", not any greeting. Your response must start with { and end with }.
 2. MANDATORY search triggers (you MUST search, no exceptions):
-   - Keywords: «новости», «news», «сейчас», «now», «сегодня», «today», «последние», «latest»
+   - Keywords: «новости», «news», «сейчас», «now», «сегодня», «today», «последние», «latest», «найди», «проверь», «поищи в интернете», «проверь в интернете»
    - Any question about the current date, weather, stock prices, sports scores, recent events
    - ANY question requiring real-world facts you cannot know from training data
 3. SEARCH QUERY FORMAT:
@@ -170,6 +174,13 @@ CRITICAL RULES:
    - NEVER invent weather, news, prices, dates, or any real-time data
    - NEVER guess «tomorrow's weather» or «today's news» — search instead
    - If unsure whether data is current → search
+  
+  CORRECT example:
+  {"search":"новости 2026"}
+
+  INCORRECT examples (FORBIDDEN):
+  - Хорошо, сейчас найдем {"search":"новости 2026"}
+  - Давай поищем {"search":"погода"}
 
 After you respond with the JSON, you will receive search results. Then give the user a complete answer based on those results.`;
   }
@@ -513,7 +524,7 @@ ${dialogueText}`;
               // Check if the response is a tool call
               const text = messages.value[assistantIdx]?.content || '';
               // eslint-disable-next-line no-console
-              // console.log('[LLM Response]', text);
+              console.log('[LLM Raw Response]', text);
               const tool = detectToolCall(text);
 
               if (tool) {
@@ -801,7 +812,7 @@ ${dialogueText}`;
     const lastMsg = messages.value.length > 0 ? messages.value[messages.value.length - 1] : null;
     if (lastMsg && lastMsg.role === 'assistant') {
       // eslint-disable-next-line no-console
-      // console.log('[LLM Final]', lastMsg.content);
+      console.log('[LLM Final]', lastMsg.content);
     }
 
     // Sync after message is sent
