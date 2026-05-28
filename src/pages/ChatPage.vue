@@ -302,56 +302,55 @@ export default defineComponent({
             return DOMPurify.sanitize(wrapped);
         }
 
-        const SCROLL_THRESHOLD = 20; // px — порог срабатывания автоскролла
-
-        function isNearBottom(): boolean {
-            const el = scrollRef.value;
-            if (!el) return true;
-            const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-            return dist < SCROLL_THRESHOLD;
-        }
-
-        const showScrollBtn = ref(false);
+        // Флаг: пользователь вручную ушёл вверх — автоскролл выключается
+        const userScrolledUp = ref(false);
 
         function scrollToBottom() {
             const el = scrollRef.value;
             if (el) el.scrollTop = el.scrollHeight;
         }
 
-        // Track scroll position to show/hide scroll button
+        const showScrollBtn = ref(false);
+
         function onScroll() {
             const el = scrollRef.value;
             if (!el) return;
             const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-            showScrollBtn.value = dist > 40;
+
+            // Пользователь докрутил до самого низа → включаем автоскролл обратно
+            if (dist < 5) {
+                userScrolledUp.value = false;
+                showScrollBtn.value = false;
+                return;
+            }
+
+            // Пользователь ушёл вверх → выключаем автоскролл, показываем кнопку
+            userScrolledUp.value = true;
+            showScrollBtn.value = true;
         }
 
-        // Срабатывает при добавлении нового сообщения
+        // При отправке нового сообщения — всегда летим вниз и сбрасываем флаг
         watch(
             () => store.displayMessages.length,
             () => {
-                void nextTick().then(() => {
-                    if (isNearBottom()) {
-                        scrollToBottom();
-                        showScrollBtn.value = false;
-                    }
-                });
+                userScrolledUp.value = false;
+                showScrollBtn.value = false;
+                void nextTick().then(scrollToBottom);
             },
         );
 
-        // Срабатывает при стриминге контента
+        // Автоскролл при стриминге контента/размышлений (только если не ушли вверх)
         watch(
             () => {
                 const msgs = store.displayMessages;
-                return msgs.length > 0 ? msgs[msgs.length - 1].content : '';
+                if (msgs.length === 0) return '';
+                const last = msgs[msgs.length - 1];
+                return last.content + (last.reasoning ?? '');
             },
             () => {
-                void nextTick().then(() => {
-                    if (isNearBottom()) {
-                        scrollToBottom();
-                        showScrollBtn.value = false;
-                    }
-                });
+                if (!userScrolledUp.value) {
+                    void nextTick().then(scrollToBottom);
+                }
             },
         );
 
@@ -371,7 +370,6 @@ export default defineComponent({
                 newVal.forEach((cur) => {
                     if (!cur.id || !cur.reasoning) return;
                     const prev = oldVal?.find((o) => o.id === cur.id);
-                    // First time reasoning appears for this message → auto-expand
                     if (!prev?.reasoning && cur.reasoning.length > 0) {
                         if (!expandedReasoning.value.has(cur.id)) {
                             expandedReasoning.value.add(cur.id);
@@ -379,6 +377,9 @@ export default defineComponent({
                         }
                     }
                 });
+                if (!userScrolledUp.value) {
+                    void nextTick().then(scrollToBottom);
+                }
             },
             { deep: true },
         );

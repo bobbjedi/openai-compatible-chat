@@ -1,6 +1,6 @@
 {
   "name": "chat",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "ChatLLM-like SPA for any OpenAI-compatible API. Voice input, rolling summaries, user facts.",
   "productName": "Simple LLM Chat",
   "author": "bobbjedi <bobbrownjedi@gmail.com>",
@@ -26,6 +26,10 @@
   "resolutions": {
     "sass": "1.77.8",
     "sass-loader": "12.6.0"
+  },
+  "overrides": {
+    "ejs": "^3.1.10",
+    "serialize-javascript": "^6.0.2"
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.13.14",
