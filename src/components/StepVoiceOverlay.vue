@@ -35,7 +35,7 @@
                             <q-icon v-else name="mic" size="64px" color="white" />
                         </template>
                         <template v-else-if="stepVoiceState.state.value === 'thinking'">
-                            <q-spinner size="64px" color="white" />
+                            <q-spinner-dots size="48px" color="white" />
                         </template>
                         <template v-else-if="stepVoiceState.state.value === 'speaking'">
                             <q-icon name="stop" size="64px" color="white" />
