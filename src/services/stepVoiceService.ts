@@ -137,7 +137,7 @@ async function doSend(text: string) {
     await chatStore.createSession(text.slice(0, 50));
   }
 
-  await chatStore.sendMessage(`[Voice] ${text}`);
+  await chatStore.sendMessage(text, undefined, true);
 
   const msgs = chatStore.messages;
   let lastContent = '';

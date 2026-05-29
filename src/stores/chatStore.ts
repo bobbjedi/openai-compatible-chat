@@ -653,9 +653,9 @@ ${dialogueText}`;
     /* eslint-enable no-await-in-loop, no-loop-func */
   }
 
-  async function sendMessage(text: string, parsedFiles?: ParseResult[]) {
+  async function sendMessage(text: string, parsedFiles?: ParseResult[], isVoice = false) {
     // eslint-disable-next-line no-console
-    console.log('[chatStore] sendMessage: ts=', Date.now(), 'text="', text, '" parsedFiles=', parsedFiles?.map((f) => ({ name: f.name, len: f.text.length })));
+    console.log('[chatStore] sendMessage: ts=', Date.now(), 'text="', text, '" parsedFiles=', parsedFiles?.map((f) => ({ name: f.name, len: f.text.length })), 'isVoice=', isVoice);
     const settings = useSettingsStore();
     await settings.load();
 
@@ -695,12 +695,15 @@ ${dialogueText}`;
 
     const hasImages = imageDataUrls.length > 0;
 
+    // Voice mode: prepend [Voice] tag to user message
+    const displayText = isVoice ? `[Voice] ${text}` : text;
+
     // 1. Add user message (only metadata saved, not file content)
     const userMsg: Message = {
       uuid: crypto.randomUUID(),
       sessionId: sid,
       role: 'user',
-      content: text,
+      content: displayText,
       attachments: attachmentMetas.length > 0 ? attachmentMetas : undefined,
       createdAt: now,
     };
@@ -745,6 +748,14 @@ ${dialogueText}`;
     }
     if (searchPrompt) {
       systemMsgs.push({ role: 'system', content: searchPrompt });
+    }
+
+    // Voice mode: input may contain STT errors, response will be spoken via TTS
+    if (isVoice) {
+      systemMsgs.push({
+        role: 'system',
+        content: 'Voice mode: user dictated via speech-to-text (may have errors), your response will be read aloud via TTS — keep it concise, use plain speech without markdown/code/symbols, be forgiving of misrecognitions.',
+      });
     }
 
     // Build payload using raw messages but prepend system messages

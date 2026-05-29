@@ -68,6 +68,7 @@ export default defineComponent({
         const fileInputRef = ref<HTMLInputElement | null>(null);
         const isListening = ref(false);
         const recognitionSupported = ref(true); // будет проверено при старте
+        const usedVoice = ref(false); // было ли сообщение набрано голосом
 
         const pendingPreviews = ref<string[]>([]);
 
@@ -115,6 +116,7 @@ export default defineComponent({
                     text.value = text.value.trim()
                         ? `${text.value.trim()} ${transcript}`
                         : transcript;
+                    usedVoice.value = true;
                 },
                 onError() {
                     isListening.value = false;
@@ -158,8 +160,10 @@ export default defineComponent({
                 pendingFiles.value = [];
             }
 
+            const isVoice = usedVoice.value;
+            usedVoice.value = false;
             text.value = '';
-            void store.sendMessage(val || '(attached files)', parsed);
+            void store.sendMessage(val || '(attached files)', parsed, isVoice);
         }
 
         const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
