@@ -13,7 +13,9 @@ import {
   type DriveUserFacts,
 } from './googleDriveProvider';
 import type { Session, Message } from './db';
-import { putSession, putMessage, deleteMessagesBySession } from './db';
+import {
+  putSession, putMessage, deleteMessagesBySession, deleteSession,
+} from './db';
 
 // --- Состояние синхронизации ---
 
@@ -229,8 +231,8 @@ export const syncService = {
   },
 
   /**
-   * Полный pull всех данных из Drive.
-   * Перезаписывает локальные данные.
+   * Pull всех данных из Drive — полная замена локальных данных.
+   * Удаляет локальные сессии/сообщения и записывает версию с Drive.
    */
   async pullAll(
     getLocalSessions: () => Session[],
@@ -247,129 +249,82 @@ export const syncService = {
     syncState.syncError.value = null;
 
     try {
-      // Read sessions list from Drive
       const driveSessions = await googleDriveProvider.readSessions();
       if (!driveSessions) {
         throw new Error('No backup found in Google Drive');
       }
 
-      // Get local sessions
+      const driveSessionIds = new Set(driveSessions.map((ds) => ds.id));
+
+      // Delete local sessions that exist on Drive (will be fully replaced)
       const localSessions = getLocalSessions();
+      await Promise.all(
+        localSessions
+          .filter((s) => driveSessionIds.has(s.id))
+          .map((s) => deleteSession(s.id)),
+      );
 
-      // Merge sessions: Drive wins if updatedAt is newer
-      const mergedSessionsMap = new Map<string, Session>();
-
-      // First, add all local sessions
-      localSessions.forEach((s) => {
-        mergedSessionsMap.set(s.id, { ...s });
-      });
-
-      // Then merge/override with Drive sessions (newer updatedAt wins)
-      driveSessions.forEach((ds) => {
-        const existing = mergedSessionsMap.get(ds.id);
-        if (!existing || ds.updatedAt > existing.updatedAt) {
-          mergedSessionsMap.set(ds.id, {
-            id: ds.id,
-            title: ds.title,
-            createdAt: ds.createdAt,
-            updatedAt: ds.updatedAt,
-            systemPrompt: ds.systemPrompt,
-            summary: ds.summary,
-            summaryEnabled: ds.summaryEnabled,
-          });
-        }
-      });
-
-      const mergedSessions = Array.from(mergedSessionsMap.values())
+      // Map Drive → local Session type
+      const sessions: Session[] = driveSessions
+        .map((ds) => ({
+          id: ds.id,
+          title: ds.title,
+          createdAt: ds.createdAt,
+          updatedAt: ds.updatedAt,
+          systemPrompt: ds.systemPrompt,
+          summary: ds.summary,
+          summaryEnabled: ds.summaryEnabled,
+        }))
         .sort((a, b) => b.updatedAt - a.updatedAt);
 
-      // Read messages for each merged session from Drive
+      await Promise.all(sessions.map((s) => putSession({ ...s })));
+
+      // Pull messages for each session in parallel
       const messagesResults = await Promise.all(
-        mergedSessions.map(async (session) => {
+        sessions.map(async (session) => {
           const driveMessages = await googleDriveProvider
             .readSessionMessages(session.id);
-          if (!driveMessages) {
+          if (!driveMessages || driveMessages.length === 0) {
             return { sessionId: session.id, messages: [] as Message[] };
           }
 
-          const driveMsgs: Message[] = driveMessages.map((dm) => ({
-            id: dm.id,
-            uuid: dm.uuid || crypto.randomUUID(),
-            sessionId: dm.sessionId,
-            role: dm.role,
-            content: dm.content,
-            reasoning: dm.reasoning,
-            searchMeta: dm.searchMeta,
-            attachments: dm.attachments,
-            createdAt: dm.createdAt,
-          }));
-
-          // Get local messages for this session
-          const localMsgs = getLocalMessages(session.id);
-
-          // Merge messages by uuid (newer createdAt wins)
-          const mergedMsgsMap = new Map<string, Message>();
-
-          localMsgs.forEach((m) => {
-            mergedMsgsMap.set(m.uuid, { ...m });
-          });
-
-          driveMsgs.forEach((dm) => {
-            const existing = mergedMsgsMap.get(dm.uuid);
-            if (!existing || dm.createdAt > existing.createdAt) {
-              mergedMsgsMap.set(dm.uuid, dm);
-            }
-          });
-
-          const mergedMsgs = Array.from(mergedMsgsMap.values())
+          const msgs: Message[] = driveMessages
+            .map((dm) => ({
+              id: dm.id,
+              uuid: dm.uuid || crypto.randomUUID(),
+              sessionId: dm.sessionId,
+              role: dm.role,
+              content: dm.content,
+              reasoning: dm.reasoning,
+              searchMeta: dm.searchMeta,
+              attachments: dm.attachments,
+              createdAt: dm.createdAt,
+            }))
             .sort((a, b) => a.createdAt - b.createdAt);
 
-          return { sessionId: session.id, messages: mergedMsgs };
+          await deleteMessagesBySession(session.id);
+          await Promise.all(msgs.map((m) => putMessage({ ...m })));
+
+          return { sessionId: session.id, messages: msgs };
         }),
       );
-
-      // Save merged sessions to IndexedDB
-      await Promise.all(
-        mergedSessions.map((s) => putSession({ ...s })),
-      );
-
-      // Save merged messages to IndexedDB
-      await Promise.all(
-        messagesResults.map(async ({ sessionId, messages }) => {
-          // Delete old messages for this session first
-          await deleteMessagesBySession(sessionId);
-          // Then save merged messages
-          await Promise.all(
-            messages.map((m) => putMessage({ ...m })),
-          );
-        }),
-      );
-
-      // Apply merged messages to store (UI)
-      messagesResults.forEach(({ sessionId, messages }) => {
-        setMessages(sessionId, messages);
-      });
-
-      // Read user facts
-      const driveFacts = await googleDriveProvider.readUserFacts();
-      if (driveFacts) {
-        setUserFacts(driveFacts.facts);
-      }
-
-      // Apply merged sessions (UI)
-      setSessions(mergedSessions);
 
       const totalMessages = messagesResults.reduce(
-        (acc, r) => acc + r.messages.length,
-        0,
+        (acc, r) => acc + r.messages.length, 0,
       );
+
+      // Apply to UI
+      messagesResults.forEach(
+        ({ sessionId, messages }) => setMessages(sessionId, messages),
+      );
+      setSessions(sessions);
+
+      const driveFacts = await googleDriveProvider.readUserFacts();
+      if (driveFacts) setUserFacts(driveFacts.facts);
 
       syncState.lastSyncAt.value = Date.now();
 
-      return {
-        sessionsCount: mergedSessions.length,
-        messagesCount: totalMessages,
-      };
+      return { sessionsCount: sessions.length, messagesCount: totalMessages };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Pull failed';
       syncState.syncError.value = msg;
