@@ -121,26 +121,47 @@ export const useChatStore = defineStore('chat', () => {
    * Returns { query } if a search tool call is found, null otherwise.
    */
   function detectToolCall(text: string): { query: string } | null {
-    // Only match when the ENTIRE response is a JSON tool call, not mixed with text.
-    // Trim and verify it starts with { and ends with }.
-    const trimmed = text.trim();
-    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
-      return null;
-    }
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-      if (
-        typeof parsed === 'object'
-        && parsed !== null
-        && 'search' in parsed
-        && typeof (parsed as Record<string, unknown>).search === 'string'
-        && ((parsed as Record<string, string>).search).length > 0
-      ) {
-        return { query: (parsed as Record<string, string>).search };
+    // Find any JSON object containing a "search" key, even embedded in other text
+    const regex = /{[^{}]*"search"\s*:\s*"([^"]+)"[^{}]*}/g;
+    let match = regex.exec(text);
+    while (match !== null) {
+      const candidate = match[0];
+      try {
+        const parsed: unknown = JSON.parse(candidate);
+        if (
+          typeof parsed === 'object'
+          && parsed !== null
+          && 'search' in parsed
+          && typeof (parsed as Record<string, unknown>).search === 'string'
+          && ((parsed as Record<string, string>).search).length > 0
+        ) {
+          return { query: (parsed as Record<string, string>).search };
+        }
+      } catch {
+        // Not valid JSON — skip this match
       }
-    } catch {
-      // Not valid JSON — ignore
+      match = regex.exec(text);
     }
+
+    // Fallback: try parsing the whole text as JSON
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        if (
+          typeof parsed === 'object'
+          && parsed !== null
+          && 'search' in parsed
+          && typeof (parsed as Record<string, unknown>).search === 'string'
+          && ((parsed as Record<string, string>).search).length > 0
+        ) {
+          return { query: (parsed as Record<string, string>).search };
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     return null;
   }
 
